@@ -1,0 +1,5811 @@
+local DONT_DELETE_FILES = true;
+local API_URL = "https://unveilr.xyz/api/hello"
+
+local Folders = {
+    temp = "temp",
+    dumps = "dumps"
+}
+
+local top_level = {
+    messages = {}
+}
+local ignored_urls = {
+    "sirius.menu/rayfield",
+    "raw.githubusercontent.com/infyiff",
+    "raw.githubusercontent.com/EdgeIY",
+    "https://raw.githubusercontent.com/bloodball",
+    "https://raw.githubusercontent.com/evoincorp/lucideblox",
+    "https://raw.githubusercontent.com/deividcomsono",
+    "https://cdn.luarmor.net/",
+    "github.com/Footagesus",
+    "api.ipify.org",
+    "ipinfo.io",
+    "github.com/dawid%-scripts",
+    "https://sdkapi%-public.luarmor.net"
+}
+
+local urlCache = {}
+local FuncCalls = {} -- Analytics
+
+local loadstring = require("@lune/luau").load
+local fs = require("@lune/fs")
+local task = require("@lune/task")
+local process = require("@lune/process")
+local roblox = {};
+local serde = require("@lune/serde")
+local net = require("@lune/net")
+
+local function httpGet(url)
+    return net.request(url).body;
+end
+
+local function identifyObfuscator(Source)
+    if Source:find("=[LPH", 0, true) or Source:find("!!LPH") then return "Luraph" end
+    if Source:find("%w+%.%w+%([\"']#") then return "MoonSec V3" end
+    if Source:find("%d%d%d%d%d%+%-?%d%d%d%d%d") then return "Prometheus" end
+
+    return "Unknown"
+end
+
+for i, v in next, require("@lune/roblox") do roblox[i] = v end
+
+local WAIT_PER_FRAME = task.wait() -- Game running at 60 fps, task.wait(1) will be WAIT_PER_FRAME * 60
+
+local Instance = roblox.Instance
+local Vector2, Vector3 = roblox.Vector2, roblox.Vector3
+local UDim, UDim2 = roblox.UDim, roblox.UDim2
+
+local rep, match, gsub, sub, split, format, lower, upper = string.rep, string.match, string.gsub, string.sub, string.split, string.format, string.lower, string.upper
+local insert, pack, find, move = table.insert, table.pack, table.find, table.move
+local min, max, floor = math.min, math.max, math.floor
+local debuginfo = debug.info
+local clock = os.clock
+local typeof = typeof
+local utf8len = utf8.len
+
+local function Require(Path)
+    Path = "./" .. Path
+
+    local vals = pack(pcall(require, Path))
+    local s = vals[1]
+
+    if s then return unpack(vals, 2) end
+
+    return loadstring(fs.readFile(Path))()
+end
+
+local ExecutorEnvironment = Require("env/Exec.lua")
+local EnumLibrary = Require("env/Enum.lua")
+local Services = Require("env/Services.lua")
+local InstanceClass = Require("env/Instance.lua")
+local InstanceFunctions = Require("env/Functions.lua")
+local HiddenProperties = Require("env/HiddenProperties.lua")
+local IsGarbageString, SetData = Require("env/Garbage.lua")
+local Classes = Require("env/Classes.lua")
+local Minify = Require("modules/minify.luau")
+local Crypto = Require("modules/crypto.luau")
+
+local IsTesting = true
+local SendLogs = false
+local Adds = 0;
+
+for _, folder in next, Folders do
+    if not fs.isDir(folder) then
+        fs.writeDir(folder)
+    end
+end
+
+local function join(folder, ...) -- joins a folder with the args
+    local out = folder
+    if sub(out, #out) ~= "/" then out ..= "/" end
+
+    for _, v in next, {...} do
+        out ..= v .. "/"
+    end
+
+    return sub(out, 1, -2)
+end
+
+local Variables = {}
+local Scopes = {} -- For handling variable scopes
+local PlaceOutside = {}
+local Counts = {}
+local Internal = {}
+local Hooks = {}
+local ParamVars = {}
+local Tables = {}
+local Addresses = {}
+local PotentialTypes = {}
+local Functions = {}
+local Drawings = {}
+local Metadata = {}
+local MetaTables = {}
+local FuncHooks = {}
+local Instances = {}
+local Predefined = {}
+local HookMetaMethods = {}
+local WrappedFuncs = {}
+local IndexValues = {}
+local LuauTypes = {
+    "string", "number", "table", "userdata", "boolean", "function", "buffer", "thread"
+}
+local AdditionalTypes = {
+	"Color3",
+	"Vector3",
+	"Vector2",
+	"UDim",
+	"UDim2",
+	"CFrame",
+	"Ray",
+	"BrickColor",
+	"Enum",
+	"Instance",
+	"Axes",
+	"Rect",
+	"Region3",
+	"Region3int16",
+	"PhysicalProperties",
+	"TweenInfo",
+	"DockWidgetPluginGuiInfo",
+	"NumberSequence",
+	"NumberSequenceKeypoint",
+	"NumberRange",
+	"TweenInfo",
+	"Faces",
+	"Random",
+	"PathWaypoint",
+	"Tween",
+	"Font",
+	"TextService",
+	"Vector3int16",
+	"Vector2int16",
+	"Faces",
+	"UDim2",
+	"DockWidgetPluginGuiInfo"
+}
+local CClosures, IgnoredErrors, ForcedErrors = {}, {}, {}
+local CallHandler, NamecallHandler
+
+local TotalNests = 0;
+
+--! Instances
+
+local Cached = {} -- Cached instances
+local Children = {} -- Make using .Parent =
+local Signals = {}
+local Connections = {}
+local Parents = {}
+
+type Variables = { [string]: table }
+type Counts = { [string]: number }
+type Internal = { [string]: any }
+type Hooks = { [string]: boolean }
+type ParamVars = { [table]: boolean }
+type Addresses = { [string]: string } -- string: table: 0x...
+type PotentialTypes = { [string]: string } -- var1: "string"
+type Tables = { [table]: boolean }
+type Functions = { [string]: boolean }
+type Metadata = { [table]: table } -- metatable: { is_important = boolean }
+type MetaTables = { [table]: table }
+
+local Settings = {
+    hookOp = true,
+    spyexeconly = false,
+    explore_funcs = true,
+    max_ops = 5_500,
+    func_ops = 0_500,
+    no_string_limit = false,
+    checkIndex = false,
+    minifier = false,
+    comments = true,
+    ui_detection = false,
+    constant_collection = true,
+    isPremium = true,
+    neverNester = false,
+    varName = "var"
+}
+
+local DEEP_ANALYSIS = false -- Anaylze all function calls
+
+local function StrToValue(Str)
+    if Str == "false" then return false
+    elseif Str == "true" then return true
+    elseif Str == "nil" then return nil
+    elseif tonumber(Str) then return tonumber(Str)
+    else return Str end
+end
+
+for index, arg in process.args do
+    local k, v = match(arg, "--([%w_]+)=(.+)")
+
+    local Arg = sub(arg, 3) -- remove --
+
+    if Arg == "prod" then
+        IsTesting = false
+        continue
+    elseif Arg == "logs" then
+        SendLogs = true
+        continue
+    end
+
+    if v then -- version=, outfile =
+        Settings[k] = StrToValue(v)
+    else
+        Settings[Arg] = true
+    end
+end
+
+local FILE_SIZE = 0
+local KILO_BYTE = 1024
+local MEGA_BYTE = 1024 ^ 2
+
+local FILE_SIZE_LIMIT = MEGA_BYTE * 3 -- 3 megabytes
+local SENT, DIDNT_PARSE, DONE_PROCESSING;
+
+local function WhiteSpaceIfNeeded(Word)
+    return match(sub(Word, #Word), "[%w_]") ~= nil and " " or ""
+end
+
+local function IsExecutor(Key: string)
+    for _, v in ExecutorEnvironment do
+        if find(v, Key) then return true end
+    end
+end
+
+local function islclosure(x)
+    if Functions[x] or CClosures[x] or typeof(x) ~= "function" then
+        return false
+    end
+    local s = debuginfo(x, "s")
+    return s ~= 'C' and s ~= '[C]'
+end
+local function iscclosure(x)
+    if CClosures[x] or typeof(x) ~= "function" or Functions[x] then return true end
+    local s = debuginfo(x, "s")
+    return s == 'C' or s == '[C]'
+end
+
+local Alphabet = split("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", "")
+local Numbers = split("0123456789", "")
+
+local function GenerateId(len)
+    local txt = ''
+    for i = 1,len or 6 do
+        txt ..= Alphabet[math.random(1, #Alphabet)]
+    end
+    return txt
+end
+
+local function GenerateGUID()
+    return `{GenerateId(8)}-{GenerateId(4)}-{GenerateId(4)}-{GenerateId(4)}-{GenerateId(12)}`
+end
+
+local TraceId = GenerateId(6)
+local CallId = Settings.obfed or (DONT_DELETE_FILES and "" or GenerateId(6))
+local MemoryCategory = TraceId
+local ArgsId = 0
+
+--> Executor Env:
+
+local CallingScript;
+local LoadedModules, RunningScripts = {}, {};
+
+local HardwareId = (function()
+    local out = ""
+    for i = 1, 4 do
+        out ..= GenerateId() .. "-"
+    end
+
+    return sub(out, 1, -2)
+end)()
+
+local function Load(Source)
+    if Source:sub(1, 5) == "<DOC" then
+        return function() DIDNT_PARSE = true; return ("the bot isnt advanced enough to parse html sorry buddy..\nhtml content:" .. Source) end
+    end
+    local s, f = pcall(loadstring, Source)
+
+    return s and f or function()DIDNT_PARSE=true;return("unable to load file, message: " .. tostring(f))end
+end
+
+local function GetCount(x) : string
+    local Count = (Counts[x] or 0) + 1
+    Counts[x] = Count
+
+    if Count == 1 then return x end
+    return `{x}_{Count}`
+end
+
+local function GetType(Name)
+    local OldType = typeof(Name)
+    if OldType ~= "string" then
+        return OldType
+    end
+
+    for Type, List in next, ExecutorEnvironment do
+        if find(List, Name) then return Type end
+    end
+end
+
+local function GetAddress(P, T)
+    local Address = Addresses[P] or format('%s0x%s', ((T == 'function' or T == 'table') and `{T}: ` or ''), match(tostring(function()end), "0x([A-Fa-f0-9]+)"))
+
+    Addresses[P] = Address
+    return Address
+end
+
+local Id, ExprId, PcallId, VarName = 0, 0, 0, Settings.varName
+
+local LOGS = {}
+local _concat = table.concat
+local function concat(tbl, sep)
+    sep = sep or ""
+
+    local out = ""
+    local c = 0
+    for _, v in tbl do
+        if not v then continue end
+
+        out ..= (c > 0 and sep or "") .. v
+        c += 1
+    end
+    return out
+end
+
+local _print = print
+print = function(...) -- change later
+    if SendLogs then return end;
+
+    local function Color(txt, code)
+        return `\27[{code}m{txt}\27[0m`
+    end
+
+    local Line, Name = debuginfo(2, "ln")
+    local ColoredName = Color(Name == "" and "???" or Name, 32)
+    local ColorLine = Color(`line {Line}`, 35)
+
+    local FinalText = `[ {ColoredName} @ {ColorLine} ]:`
+
+    local Beautified = {};
+    for _, v in next, {...} do
+        local x = (typeof(v) == "table" or typeof(v) == "function") and "\"ignored data type\"" or tostring(v)
+
+        insert(Beautified, x)
+    end
+
+    _print(FinalText, ...)
+    insert(LOGS, concat(Beautified, " "))
+end
+
+local function HideErrors(txt, replaceWith, includeLines)
+    if Settings.debug then return txt end
+    
+    replaceWith = "[" .. (replaceWith or "internal") .. "]"
+    txt = gsub(txt, '%[string \\"main\\"%]', replaceWith)
+    txt = gsub(txt, "root/[^\n]+main:", replaceWith .. ":") -- hide errors on linux
+    if includeLines then --> Should hide the lines aswell
+        txt = gsub(txt, ":%d+:", ":")
+    end
+    return txt;
+end
+
+local _tab = rep(" ", 4)
+
+local CreateSignal;
+local ValueTypes = {}
+local ToBeautify = {}
+local ToBeautifyLen = 0;
+local Output = {}
+local GlobalEnv
+
+local function GenerateProperty(ValueType)
+    --[[
+        Generates random values based on ValueType,
+        for example, a string
+        a random string from 3 characters to 20,
+        a number, 3 to 7 digits.
+    ]]
+
+    local Value = ValueTypes[ValueType]
+
+    if Value then return Value end
+
+    local Category = ValueType.Category
+
+    if not find({"primitive", "datatype"}, Category:lower()) then return nil end
+
+    local Name = ValueType.Name
+    local Type = ({bool = "boolean", float = "number", int = "number", int64 = "number"})[Name] or Name
+
+    if Type == "number" then
+        local Number = "";
+        local Digits = math.random(10, 11)
+
+        for i = 1, Digits do
+            Number ..= Numbers[math.random(1, #Numbers)]
+        end
+
+        Value = tonumber(Number)
+    elseif Type == "string" then
+        Value = GenerateId(math.random(3, 20))
+    elseif Type == "boolean" then
+        Value = math.random(1,2)==2
+    elseif Type == "Vector2" then
+        Value = Vector2.new(1920, 1080)
+    end
+
+    ValueTypes[ValueType] = Value
+    return Value
+end
+
+local function ADD(x)
+	if not SendLogs then return end
+
+    _print("--dbg"..(x:gsub("\n","\n--dbg")))
+end
+
+local ParamCount = 50
+local SpiedParams
+
+local CallStack = {}
+local Iterated, Strings, StringsList = {}, {}, {}
+SetData{
+    Strings = Strings
+}
+
+local function Dump(Source, Nest, Original)
+    if typeof(Source) == "string" and sub(Source, 1, 5) == "--err" then
+        DIDNT_PARSE = DIDNT_PARSE or Original;
+
+        return "--err\n-- Unable to parse this file."
+    end
+
+    Nest = Nest or 0
+    ArgsId += 1
+
+    local TabLimit = 20
+    local Tab = rep(_tab, min(Nest, TabLimit))
+    local Suffix, IsInPcall, DidCallError
+
+    local OpCount = 0
+    local MAX_OPS = Original and Settings.max_ops or Settings.func_ops
+
+    local WhileCount = 0
+
+    local Ids = {}
+    local Looped = {}
+    local ForLoops = {}
+    local WaitingToClose = {}
+    local Task = {}
+    local IsUI, IsInLoadstring = nil, 0;
+
+    local function OpCountCheck()
+        OpCount += 1
+        
+        if OpCount >= MAX_OPS then print("too much, quit it") error("too many operations", 2) end
+    end
+
+    local function GetWaitingEnds()
+        return {
+            ifs = 0,
+            whiles = 0,
+            forloops = 0
+        }
+    end
+
+    local WaitingEnds = GetWaitingEnds()
+
+    local function SetNest(n)
+        Nest = max(n, 0)
+        Suffix = Nest == 0 and "" or `_{Nest}`
+
+        Tab = rep(_tab, min(Nest, TabLimit))
+    end
+
+    local function AddNest(n, ShouldTheTotalnestsVariableBeAffected)
+        n = n or 1
+        if n > 0 or ShouldTheTotalnestsVariableBeAffected then TotalNests += n end
+
+        SetNest(Nest + n)
+    end
+
+    local function GetNest() return Nest end
+
+    AddNest(0)
+
+    local function IsWeird(Key) : boolean
+        if Key == "" or typeof(Key) ~= "string" or tonumber(sub(Key, 1, 1)) or Strings[Key] then return true end -- If key == "" or the key isnt a string or the first byte is a number
+
+        return match(Key, "[^%w_]") ~= nil
+    end
+
+    local function GetHex(Data)
+        return match(tostring(Data), "0x[a-fA-F0-9]+")
+    end
+
+    local function _360NoScope(var)
+        local Scope = Scopes[var] -- TotalNests when DefineVar(var) was called
+        if(Scope and Scope < TotalNests and Scope ~= 0) then
+            -- if TotalNests > Scope then the scope is larger, probably nested now AND if the scope isn't 0, because 0 can be used everywhere
+
+            insert(PlaceOutside, var)
+            Scopes[var] = nil;
+        end
+    end
+
+    local function Beautify(Data, Indent, Args) : string
+        Indent = min(Indent or Nest + 1, TabLimit)
+
+        Args = Args or {}
+
+        local Var = Variables[Data] or (not Args.no_strs and Strings[Data] or false)
+        if typeof(Var) == "string" then _360NoScope(Var) return Var end
+
+        local funcName = Args.funcName
+
+        local function IsRecursive(t)
+            if typeof(t) ~= "table" then return false end
+            
+            local visited = {}
+
+            local function check(tbl)
+                if visited[tbl] then
+                    return true
+                end
+
+                visited[tbl] = true
+
+                for _, v in next, tbl do
+                    if typeof(v) == "table" then
+                        if check(v) then
+                            return true
+                        end
+                    end
+                end
+
+                visited[tbl] = nil
+                return false
+            end
+
+            return check(t)
+        end
+
+        local function escape_string(s)
+	        if not utf8.len(s) then
+		        return s:gsub("[\0-\31\127\141\143\144]", function(a)
+			        return "\\" .. a:byte()
+		        end)
+	        end
+
+	        local out, n = {}, 0
+	        for _, cp in utf8.codes(s) do
+		        if (cp >= 0 and cp <= 31) or cp == 127 then
+			        n += 1
+			        out[n] = "\\" .. cp
+		        else
+			        n += 1
+			        out[n] = utf8.char(cp)
+		        end
+	        end
+
+	        return concat(out)
+        end
+
+        local function formatBytes(n)
+            if n < KILO_BYTE then
+                return `{n} bytes left`
+            elseif n < MEGA_BYTE then
+                return format(`%.2fkb left.`, n / KILO_BYTE)
+            else
+                return format(`%.2fmb left.`, n / MEGA_BYTE)
+            end
+        end
+
+        local Beautifiers = {
+            ["string"] = function()
+                local replaced = escape_string(gsub(Data, "[\n\b\t\v\f\r\\]", {
+                    ["\n"] = "\\n", ["\b"] = "\\b", ["\t"] = "\\t", ["\v"] = "\\v", ["\f"] = "\\f", ["\r"] = "\\r", ["\\"] = "\\\\"
+                }))
+
+                if not Settings.no_string_limit then
+                    local len = utf8len(replaced) or #replaced
+                    local maxBytes = 1000
+
+                    if len > maxBytes then
+                        replaced = sub(replaced, 1, maxBytes) .. `..({formatBytes(len)})` --> heh
+                    end
+                end
+
+                replaced = gsub(replaced, '"', '\\%1')
+
+                return ('"' .. replaced .. '"')
+            end,
+            ["table"] = function()
+                if IsRecursive(Data) then return "{ 'recursive table' }" end
+                local maxLength = (Args.max_table_length or math.huge)
+                if maxLength < #Data then return "{ 'table too large' }" end
+
+                local out, isArray, count = {}, true, 0
+                local newTab = rep(_tab, Indent)
+                local nextIndent = Indent + 1
+
+                for k, v in next, Data do
+	                count += 1
+                    if count > maxLength then return "{ 'table too large' }" end
+	                if count ~= k then isArray = false end
+
+	                local baseKey
+	                if not isArray then
+		                baseKey = IsWeird(k) and ("[" .. Beautify(k) .. "] = ") or (k .. " = ")
+	                else
+		                baseKey = ""
+	                end
+
+            	    out[#out+1] = "\n" .. newTab .. baseKey .. Beautify(v, nextIndent, Args) .. ","
+                end
+
+                local str
+                if count == 0 then
+	                str = "{}"
+                else
+	                out[#out+1] = "\n" .. rep(_tab, Indent - 1) .. "}"
+	                str = "{" .. concat(out) -- builds final string once
+                end
+
+                local mt = getmetatable(Data)
+                if mt and Args.allow_mt and not Tables[Data] then
+	                local mtType = typeof(mt)
+	                if mtType ~= "table" then
+		                str = format("setmetatable(%s, { __metatable = %s })", str, Beautify(mt, Indent, {ignore_funcs = true}))
+	                else
+		                local oldTostring = rawget(mt, "__tostring")
+		                if oldTostring then
+			                mt.__tostring = function()
+				                return "this is not the actual __tostring, this is just an internal feature to prevent detections"
+			                end
+		                end
+		                str = "setmetatable(" .. str .. ", " .. Beautify(mt, Indent) .. ")"
+		                if oldTostring then mt.__tostring = oldTostring end
+	                end
+                end
+
+                return str
+            end,
+            ["function"] = function() --! probably merge output?
+                local BData = ToBeautify[Data]
+                if (not BData or not DONE_PROCESSING) and not Args.bypass_beautify and (Settings.hookOp or Args.wait_till_end) then
+                    --[[
+                        Explanation:
+                        If the function hasn't been beautified yet (BData)
+                        And bypass_beautify isn't on
+                        AND hookOp & wait_till_end are both off
+
+                        * To make it so if we're not done processing it still has to return the ID:
+                        if not Beautified or not DONE_
+                    ]]
+
+                    if BData then return BData[1] end --> The ID
+                    
+                    local Id = GenerateId(32);
+                    ToBeautifyLen += 1
+                    ToBeautify[Data] = {Id, Indent, Args, ToBeautifyLen}
+                    return Id;
+                end
+
+                local Idx = Nest + 1
+                CallStack[Idx] = Data
+
+                local S, Name = debuginfo(Data, "sn");
+                local Md = Metadata[Data]
+
+                if S == "[C]" then return Name == "" and `GET_C_CLOSURE({GetHex(Data)})` or Name end
+                if not Settings.explore_funcs then return `function{Name ~= "" and " " .. Name or ""}()--[[enable explore funcs to view this function]]end` end
+                if Args.ignore_funcs then return "function()--[[function ignored]]end" end
+                if (Md and Md.dont_beautify) then return "function()--[[beautifying disabled on this function]]end" end
+
+                local Old, OldParams, OldNest, OldOps, OldTab, OldWaits = Output, SpiedParams, Nest, OpCount, Tab, WaitingEnds
+                Output, SpiedParams, OpCount, Tab, WaitingEnds = {}, SpyParams(ParamCount), 0, "", GetWaitingEnds()
+                
+                SetNest(Indent)
+
+                local NextTab = rep(_tab, min(Indent, TabLimit))
+
+                local Dumped = Dump(Data, Indent, false)
+
+                local Out = (not Args.dont_wrap and (funcName and `function {funcName}` or "function") .. "(...)\n" or "")
+
+                if not Args.ignore_args then Out = Out .. NextTab .. GetParamStr() end
+
+                --[[if #Output > 0 then
+                    for _, v in next, Output do
+                        --Out ..= `{NextTab}{v}\n`
+                        Out ..= `{v}\n`
+                    end
+                end]]
+
+                Out ..= Dumped
+
+                for _, n in WaitingEnds do
+                    for x = 1, n do Out ..= format("\n%send", NextTab) end
+                end
+
+                if not Args.dont_wrap then
+                    Out ..= "\n" .. rep(_tab, Indent - 1) .. "end"
+                end
+
+                local Args = `args{ArgsId}`
+                local ReplaceStr = {}
+
+                for i = 1, ParamCount do
+                    insert(ReplaceStr, `{Args}%[{i}%]`)
+                end
+                insert(ReplaceStr, "%.%.%.")
+
+                Out = gsub(Out, concat(ReplaceStr, ", "), "...")
+
+                Output, SpiedParams, OpCount, Tab, WaitingEnds = Old, OldParams, OldOps, OldTab, OldWaits
+                SetNest(OldNest)
+
+                CallStack[Idx] = nil
+
+                return Out
+            end,
+            ["number"] = function()
+                local decimals = Args.floating_point
+                if decimals then return format("%." .. decimals .. "f", Data) end
+                
+                if tonumber(format("%.4f", Data)) ~= Data then Data = math.ceil(Data) end --> weird floats
+
+                local str = tostring(Data)
+                return str == "-inf" and "-math.huge" or str == "inf" and "math.huge" or str
+            end,
+            ["userdata"] = function()
+                local mt = getmetatable(Data)
+                if mt then --> newproxy()
+                    return `get_user_data({Beautify(mt, Indent + 1, {ignore_funcs = true})})`
+                end
+
+                return Beautify(tostring(Data))
+            end,
+            ["thread"] = function()
+                return `get_thread({GetHex(Data)})`
+            end,
+            ["UDim2"] = function()
+                local X, Y = Data.X, Data.Y
+
+                return Variables[Data] or `UDim2.new({X.Scale}, {X.Offset}, {Y.Scale}, {Y.Offset})`
+            end,
+            ["UDim"] = function()
+                return Variables[Data] or `UDim.new({Data.Scale}, {Data.Offset})`
+            end,
+            ["Vector2"] = function()
+                return Variables[Data] or `Vector2.new({Data.X}, {Data.Y})`
+            end,
+            ["Vector3"] = function()
+                return Variables[Data] or `Vector3.new({Data.X}, {Data.Y}, {Data.Z})`
+            end,
+            ["Color3"] = function()
+                return Variables[Data] or `Color3.fromRGB({floor(Data.R * 255)}, {floor(Data.G * 255)}, {floor(Data.B * 255)})`
+            end,
+            ["CFrame"] = function()
+                return Variables[Data] or `CFrame.new({tostring(Data)})`;
+            end
+        }
+
+        return (Beautifiers[typeof(Data)] or function() return tostring(Data) end)()
+    end
+
+    local function BeautifyTuple(...)
+        local Out = ""
+        local Packed = pack(...)
+
+        for i = 1, Packed.n do
+            Out ..= Beautify(Packed[i]) .. ", "
+        end
+
+        return sub(Out, 1, -3)
+    end
+
+    local function BeautifyTupleOptions(Options, ...)
+        local Out = ""
+        local Packed = pack(...)
+
+        for i = 1, Packed.n do
+            Out ..= Beautify(Packed[i], nil, Options) .. ", "
+        end
+
+        return sub(Out, 1, -3)
+    end
+
+    function Index(Key, Path) : string
+        if Path == "..." then
+            Path = "(...)"
+        end
+
+        if not IsWeird(Key) then
+            return Path and `{Path}.{Key}` or Key
+        end
+
+        Path = Path or "getfenv()"
+        return `{Path}[{Beautify(Key)}]`
+    end
+
+    local function Append(Text)
+        if (FILE_SIZE >= FILE_SIZE_LIMIT and not SENT) then
+            SENT = true
+
+            insert(Output, (`-- file too large ({FILE_SIZE / 1024 // 1024} mb)`))
+            ADD(Output[#Output])
+            print("File too large.")
+            return error("File size too large.", 2)
+        end
+
+        if sub(Text, #Text) == "\n" then Text = sub(Text, 1, #Text - 1) end
+
+        local Content = Tab .. Text
+        ADD(Content)
+
+        FILE_SIZE += #Content
+        Output[#Output+1] = Content
+    end
+
+    local Comment = Settings.comments and function(x)
+        Append("-- " .. x)
+    end or function()end
+    local InlineComment = Settings.comments and function(x)
+        Output[#Output] ..= " -- " .. x
+    end or function()end
+
+    local function CloseStatement(Extra, irt)
+        AddNest(-1, irt)
+        Append("end" .. (Extra or ""))
+    end
+
+    local function CloseAllEnds(Ends)
+        for _, n in Ends or WaitingEnds do
+            for x = 1, n do
+                CloseStatement()
+            end
+        end
+        WaitingEnds = GetWaitingEnds()
+    end
+
+    local function GetVar()
+        Id += 1
+
+        return `{VarName}{Id}`
+    end
+
+    local function GetInternalValue(x)
+        local Var = Variables[x]
+        local Int = Internal[Var]
+
+        if Int ~= nil then --! issue here (Int[1] ~= x?)
+            local i = Int[1];
+            if x == i then return x end
+            return GetInternalValue(i)
+        end
+
+        return x
+    end
+
+    local function SetInternal(x, y)
+        Internal[x] = {y}
+        PotentialTypes[x] = PotentialTypes[x] or typeof(y)
+    end
+
+    local function BeautifyButIgnoreFunctions(...)
+        local Out = ""
+        local Packed = pack(...)
+
+        for i = 1, Packed.n do
+            local Value = Packed[i]
+            if typeof(GetInternalValue(Value)) == "function" then
+                Out ..= "function()end, "
+            else
+                Out ..= Beautify(Value) .. ", "
+            end
+        end
+
+        return Out:sub(1, -3)
+    end
+
+    local function GetData(Table : table) : table
+        local List = {}
+
+        List.Variable = Variables[Table]
+        List.RealInstance = Cached[Table]
+        List.InternalValue = GetInternalValue(Table)
+        List.Metatable = MetaTables[Table]
+    end
+
+    local Typeof = function(x)
+        local v = GetInternalValue(x)
+
+        return PotentialTypes[v] or typeof(x)
+    end
+
+    local IsOfType = function(object, type, playNice) -- playNice = whether the variables[Object] is allowed
+        if Functions[object] and type == "function" then return true end
+        if type == "any" then return true end
+
+        local Var = Variables[object]
+        if Var and type ~= "table" then
+            return playNice
+        end
+
+        if (Var or typeof(object) == "table") and type == "table" then return true end
+        return typeof(object) == type;
+    end
+
+    local Definitions = {}
+
+    local function Define(Var, Value, Tag)
+        local Prefix = Tag ~= "__newindex" and "local " or ""
+        local End = not Value and ";" or ` = {Value}`
+
+        Append(`{Prefix}{Var}{End}`)
+        Definitions[Var] = #Output
+        if Prefix ~= "" then Scopes[Var] = TotalNests end
+    end
+
+    local function Undefine(Var)
+        local Line = Definitions[Var]
+        if not Line then return end
+        Output[Line] = nil;
+    end
+
+    local function DefineVars(Vars, Value)
+        local End = not Value and ";" or ` = {Value}`
+
+        Append(`local {concat(Vars, ", ")}{End}`)
+        for _, Var in Vars do Scopes[Var] = TotalNests end
+    end
+
+    local function DefineVar(Value, Int)
+        local Var = GetVar()
+        if Int ~= nil then SetInternal(Var, Int) end
+
+        Define(Var, Value)
+
+        return Var
+    end
+
+    local AlreadySpied = {}
+    local Iterators = {}
+
+    local function CreateFunction(Callback, Path, WrapInMt)
+        for f, FuncPath in next, Variables do
+            if FuncPath == Path then
+                return f
+            end
+        end
+
+        if WrapInMt then
+            local x = Callback;
+            local mt = {
+                __call = function(_, ...)
+                    return x(...)
+                end
+            }
+            for _, v in next, {"index", "newindex", "add", "sub", "mul", "div", "idiv", "iter", "concat", "pow"} do 
+                mt["__" .. v] = function() error("wtf") end;
+            end
+            Callback = setmetatable({}, mt)
+            PotentialTypes[Callback] = "function"
+        end
+
+        Variables[Callback] = Path
+        Functions[Callback] = true
+
+        return Callback;
+    end
+
+    local function SingleCompArth(a, Internal, Symbol)
+        local Type = PotentialTypes[a] or typeof(Internal)
+        
+        if Symbol == "-" then
+            if Type ~= "number" and IsOfType(Internal, "Instance") then
+                error(`attempt to perform arithmetic (unm) on {Type}`)
+            end
+        elseif Symbol == "#" then
+            if not find({"table", "string"}, Type) and IsInPcall then
+                error(`attempt to get length of a {Type} value`)
+            end
+        end
+    end
+
+    local function Spy(Path, Flags, Md)
+        assert(typeof(Path) == "string", `invalid argument #1 to 'Spy', string expected got {typeof(Path)}, line {debuginfo(2, "l")}`)
+
+        local s = AlreadySpied[Path]
+        if s then return s end
+
+        local function Arth(Symbol)
+            return function(x, y)
+                local Var = DefineVar(`{Beautify(x)} {Symbol} {Beautify(y)}`)
+
+                if Symbol == ".." then
+                    PotentialTypes[Var] = "string"
+                else
+                    PotentialTypes[Var] = "number"
+                end
+
+                local X, Y = GetInternalValue(x), GetInternalValue(y)
+                local MX, MY = Metadata[x] or {}, Metadata[y] or {}
+
+                local Value;
+
+                if Symbol ~= ".." then
+                    local xLune, yLune = MX.is_lune, MY.is_lune;
+                    local xNumber, yNumber = IsOfType(X, "number"), IsOfType(Y, "number");
+
+                    if not xLune and not yLune and not xNumber and not yNumber then -- Just stop
+                    else
+                        local isAllowed = (xLune and yLune) or (xLune and yNumber) or (xNumber and yLune) or (yNumber and xLune) or (yNumber and xNumber)
+                        if isAllowed then
+                            if Symbol == "+" then Value = X + Y
+                            elseif Symbol == "-" then Value = X - Y
+                            elseif Symbol == "*" then Value = X * Y
+                            elseif Symbol == "/" then Value = X / Y
+                            elseif Symbol == "//" then Value = X // Y
+                            elseif Symbol == "%" then Value = X % Y
+                            end
+
+                            Comment(Beautify(Value, nil, { floating_point = 6 }))
+                        end
+                    end
+                else
+                    local CanConcat = {
+                        "string", "number"
+                    }
+
+                    if find(CanConcat, typeof(X)) and find(CanConcat, typeof(Y)) then
+                        Value = X .. Y
+                        PotentialTypes[Var] = "string"
+
+                        Comment(Beautify(Value))
+                    end
+
+                    return FallbackValue(Var, Value or Spy(Var))
+                end
+
+                if Value then
+                    PotentialTypes[Var] = "number"
+
+                    return FallbackValue(Var, Value)
+                end
+
+                local Thing = typeof(Value)
+                if Thing ~= "table" then PotentialTypes[Var] = Thing end
+
+                return Spy(Var)
+            end
+        end
+
+        Flags, Md = Flags or {}, Md or {}
+
+        local IsParam = Flags.Param or Flags.OriginalIsParam
+        local Math = {
+            __add = "+",
+            __sub = "-",
+            __mul = "*",
+            __mod = "%",
+            __div = "/",
+            __idiv = "//",
+            __pow = "^",
+            __concat = ".."
+        }
+
+        local Updated = {}
+
+        local Meta
+        Meta = {
+            __index = function(Vars, Key)
+                local Var = Vars[1];
+                local function define()
+                    local Value = Index(Key, Path);
+                    if #Vars == 1 then
+                        Define(Var, Value)
+                    else
+                        DefineVars(Vars, Value)
+                    end
+                end
+
+                IndexValues[Var] = { Path, Key }
+
+                local P = Predefined[Key]
+                if P then
+                    define()
+                    return FallbackValue(Var, P[1], Md) 
+                end
+
+                local Int = Internal[Path]
+                if Int then
+                    local CustomVar = Md.custom_var
+                    if CustomVar then Id += 1 define() end -- Color3, Vector3, ...
+                    if typeof(Int[1]) ~= "table" and typeof(Int[1]) ~= "string" then
+                        define()
+
+                        return FallbackValue(Var, nil)
+                    end
+
+                    Id -= 1
+                    local Value = Int[1][Key]
+
+                    if typeof(Value) == "function" then -- x.match
+                        return CreateFunction(function(x, ...)
+                            local Values;
+                            local Args = {...}
+                            pcall(function()
+                                Values = pack(Value(GetInternalValue(x), unpack(Args)))
+                            end)
+
+                            local IsNamecall = Variables[x] == Path
+                            if IsNamecall then
+                                x = Int[1]
+                            end
+
+                            print("YO", x, ...)
+
+                            if IsNamecall and Values then
+                                local Needed = {}
+
+                                for _ = 1, min(Values.n, 1) do
+                                    insert(Needed, GetVar())
+                                end
+
+                                DefineVars(Needed, `{Path}:{Key}({BeautifyTuple(...)})`)
+
+                                local Fallbacks = {}
+                                for i, v in next, Needed do
+                                    insert(Fallbacks, FallbackValue(v, Values[i]))
+                                end
+
+                                return unpack(Fallbacks)
+                            end
+
+                            if not Values and (Variables[x] or Strings[x]) then
+                                local Arg = IsNamecall and `{Path}:{Key}({BeautifyTuple(...)})` or `{Index(Key, Path)}({BeautifyTuple(x, ...)})`
+                                return Spy(DefineVar(Arg), nil, {
+                                    force_true = true
+                                })
+                            end
+
+                            return unpack(Values)
+                        end, Index(Key, Path))
+                    end
+
+                    if CustomVar then
+                        return FallbackValue(Var, Value)
+                    end
+
+                    return Value;
+                end
+                
+                define()
+                _360NoScope(Path);
+
+                local New = Updated[Key]
+
+                if New then
+                    SetInternal(Var, New[1]) -- support for things like: UI.Visible = false
+                end
+
+                Flags.OriginalIsParam = nil
+
+                return Spy(Var, Flags, Md)
+            end,
+            __newindex = function(_, Key, Value)
+                Id -= 1 -- since Var adds one
+
+                Updated[Key] = {Value}
+
+                local Int = Internal[Path] or {}
+
+                if typeof(Int[1]) == "table" then
+                    Int[1][Key] = Value
+                else -- idk why i do this tbh (its to prevent stuff like getgenv().x = y from being logged twice)
+                    local Indexed = Index(Key, Path)
+
+                    Define(Indexed, Beautify(Value), "__newindex")
+                end
+            end,
+            __call = function(Vars, ...)
+                _360NoScope(Path);
+                
+                local Var = Vars[1]
+                local Int = Internal[Path]
+
+                local f = Int and Int[1]
+
+                if not Variables[f] and typeof(f) == "function" then -- if the internal value exists AND is a function
+                    Id -= 1
+
+                    local Values = pack(f(...))
+
+                    if Md.custom_var then
+                        local Vars = {}
+                        local Falls = {}
+
+                        for i = 1, Values.n do
+                            local x = GetVar()
+
+                            insert(Vars, x)
+                            insert(Falls, FallbackValue(x, Values[i]))
+                        end
+
+                        DefineVars(Vars, `{Path}({BeautifyTuple(...)})`)
+                        return unpack(Falls);
+                    end
+
+                    return unpack(Values)
+                end
+
+                local Type = GetType(Path) or PotentialTypes[Path]
+
+                if Type == "Instance" or Type == "number" then
+                    error(`attempt to call a {Type} value.`)
+                end -- keep this so moonveil works.
+
+                local Arg1 = (...)
+
+                local Value;
+
+                local Args = pack(...)
+                local Arg2 = Args[2]
+
+                local FirstArg = Variables[Arg1]
+                local IndexValue = IndexValues[Path] or split(Path, ".")
+
+                local IsNamecall = FirstArg == IndexValue[1] and typeof(IndexValue[2]) == "string"--IndexVar == IntVar and #Indexes > 1;
+
+                if IsNamecall then -- Namecall
+                    _360NoScope(FirstArg)
+                    local Beautified = BeautifyTuple(select(2, ...))
+
+                    Value = `{FirstArg}:{IndexValue[2]}({Beautified})\n` -- i remove Index(IntVar) here i dont remember why
+                end
+
+                if not Value then
+                    local Beautified = ""
+                    for i = 1, Args.n do
+                        local Arg = Args[i]
+                        Beautified ..= Beautify(Arg, Nest + 1) .. ", "
+                    end
+
+                    Value = `{Path}({sub(Beautified, 1, -3)})\n`
+                end
+
+                if not Value and Args.n == 2 and GetInternalValue(Arg1) == nil then
+                    if GetInternalValue(Arg2) == nil then -- started the iteration, when its not nil then its done
+                        Iterators[Path] = true
+
+                        -- its an iterator thing
+                        local i, v = GetCount("i"), GetCount("v")
+
+                        Append(`for {i}, {v} in {Path} do`)
+
+                        WaitingEnds.forloops += 1
+                        AddNest(1)
+
+                        return Spy(i), Spy(v)
+                    elseif Iterators[Path] then
+                        CloseStatement()
+                        WaitingEnds.forloops -= 1
+
+                        return nil, nil
+                    end
+                end
+
+                Define(Var, Value)
+
+                return Spy(Var, Flags, Md)
+            end,
+            __tostring = function()
+                Id -= 1
+                return Path
+            end,
+            __unm = function()
+                local Value = GetInternalValue(Path)
+                local Var = DefineVar(`-{Path}`)
+
+                InlineComment(tostring(Value))
+
+                SingleCompArth(Path, Value, "-")
+
+                if typeof(Value) == "number" or (typeof(Value) == "table" and (getmetatable(Value) or MetaTables[Value] or {}).__unm) then
+                    return -Value
+                end
+
+                return Spy(Var, Flags, Md)
+            end,
+            __iter = function(_, Func)
+                Id -= 1
+
+                local Called;
+
+                local i, v = GetCount("i"), GetCount("v")
+                local FixedPath = Path
+
+                if Func then
+                    FixedPath = Func == "next" and `next, {Path}` or `{Func}({Path})`
+                end
+
+                Append(`for {i}, {v} in {FixedPath} do`) --! add func
+
+                return function()
+                    if Called then WaitingEnds.forloops -= 1 CloseStatement() return nil, nil else WaitingEnds.forloops += 1 AddNest() Called = true end
+
+                    return Spy(i, Flags, Md), Spy(v, Flags, Md)
+                end
+            end,
+            __len = function()
+                local Value = GetInternalValue(Path)
+                local Var = DefineVar(`#{Path}`)
+                SingleCompArth(Path, Value, "#")
+
+                if typeof(Value) == "table" or typeof(Value) == "string" then
+                    return #Value
+                end
+
+                return Spy(Var, Flags, Md)
+            end,
+            __metatable = nil
+        }
+
+        for method, symbol in next, Math do
+            Meta[method] = Arth(symbol) -- __add and stuff
+        end
+
+        for methodName, method in next, Meta do
+            Meta[methodName] = function(_, ...)
+                local s, m = pcall(OpCountCheck)
+                if not s then Append(`error({Beautify(m)})`) CloseAllEnds() error(m) end
+
+                if Math[methodName] then
+                    return method(_,...)
+                end
+
+                return method({GetVar()}, ...)
+            end
+        end
+
+        Meta = setmetatable({}, Meta)
+
+        Variables[Meta] = Path
+        ParamVars[Meta] = IsParam
+
+        AlreadySpied[Path] = Meta
+        Metadata[Meta] = Md
+
+        return Meta
+    end
+
+    function FallbackValue(Var, Value, Md)
+        if Settings.hookOp and not Functions[Value] then
+            SetInternal(Var, Value)
+            return Spy(Var, nil, Md)
+        end
+
+        return Value
+    end
+
+    local Loaded = (typeof(Source) == "function" and Source) or Load(Source)
+    
+    local Env;
+    local EnvValues = {io={},package={},getallthreads={}}
+
+    local BaseEnv = {}
+
+    local Gc = {}
+    local GC_FILL_COUNT = 5000
+
+    for i = 1, GC_FILL_COUNT do
+        --> fill gc with random values
+        insert(Gc, math.random(1, 2) == 2 and function()end or {});
+    end
+
+    local function Obfuscate(Code)
+        local File = join(Folders.temp, GenerateId(6))
+        local Obfuscator = identifyObfuscator(Code)
+
+        fs.writeFile(File, Code)
+        local s, t = pcall(Obf, File, Obfuscator)
+        if typeof(t) ~= "string" or sub(t, 1, 5) == "--err" then
+            s = false
+        end
+
+        fs.removeFile(File)
+        return s, t
+    end
+
+    local Luraph, LoadCallsSinceLuraph = false, 0;
+    local LoadCalls = 0
+    local Pristine = false;
+
+    local function CreateLoader(Path) --> CreateLoader("loadstring")
+        --! add an offset when loading, so it adds the number of lines in the code to the error message (load("\nprint()")) if errors, should return [luau.load: 2] not : 1
+
+        local f = CreateFunction(function(Data, ...)
+            if
+                typeof(Data) == "number" or (typeof(Data) == "table" and not Variables[Data] and getmetatable(Data))-- or typeof(Data) ~= "string"
+            then
+                return error("naughty boy..")
+            end
+
+            if Data=="LuaP" then
+                Luraph = true
+            elseif Luraph then LoadCallsSinceLuraph += 1 end
+
+            LoadCalls += 1
+
+            local data = Data
+            local Var = GetVar();
+
+            Data = GetInternalValue(Data)
+            if Data == "return pcall(function()return 1/\"abc\"end)" then
+                Pristine = true
+            end
+
+            local md = Metadata[data]
+
+            Define(Var, `{Path}({BeautifyTuple(data, ...)})`)
+
+            if typeof(Data) == "number" then return nil, "STOP" end
+
+            if typeof(Data) == "string" and Settings.hookOp then
+                local success, obf = Obfuscate(Data) --! DO NOT PCALL. IT IS ALREADY PCALLED.
+
+                if success then
+                    Data = obf
+                else
+                    --[[if Data == "\27LuaP" then --> Luraph thing
+                        return nil, '[string "\27LuaP"]:1: Expected identifier when parsing expression, got \'\27\''
+                    elseif Data == "rf" then
+                        return nil, '[string luau.load(...)]:1: Incomplete statement: expected assignment or a function call'
+                    end
+                    print("Naman",Data)]]
+
+                    local _, e = pcall(loadstring, Data, ...)
+                    --if not IsInPcall then
+                        local errMsg = tostring(e)
+                        errMsg = errMsg:match("syntax error: (.+)\n?stack")
+                    --end
+
+                    Comment(errMsg)
+
+                    return nil, "Requested module experienced an error while loading"
+                end
+            end
+
+            if typeof(Data) == "string" then
+                local LoadedFunc;
+
+                local s, loaded = pcall(loadstring, Data)
+                if s then
+                    LoadedFunc = loaded
+                else
+                    loaded = tostring(loaded):match("[^\n]+");
+
+                    Comment(loaded)
+
+                    if false and not (md and md.is_http) then
+                        return nil, loaded -- nil, error msg
+                    else -- http requests can also just be 404 errors, which is why they need to be possible.
+                        return nil, loaded
+                    end
+                end
+
+                return CreateFunction(function(...)
+                    local NewVar = DefineVar(`{Var}()`);
+                    local Out, id = Output, Id
+                    Output, IsInLoadstring = {}, IsInLoadstring + 1
+
+                    local ReturnValues = pack(
+                        pcall(
+                            setfenv(LoadedFunc, Env),
+                            ...
+                        )
+                    )
+
+                    IsInLoadstring -= 1
+                    if IsUI then
+                        IsUI, Id = false, id
+                        Output = Out
+                        
+                        Comment("A UI library here was detected, therefore the script errored & prevented the UI from running (This is an expiremental feature, Please verify this is a UI library)")
+                        return Spy(NewVar);
+                    else
+                        Out[#Out+1] = concat(Output, "\n")
+                        Output = Out
+                    end
+
+                    if ReturnValues[1] then
+                        return unpack(ReturnValues, 2)
+                    end
+
+                    Append(`error({Beautify(ReturnValues[2])}) -- Loadstring error`)
+
+                    return Spy(NewVar)
+                end, Var);
+            else
+                if (md and md.error_on_load) then
+                    return nil, md.error_on_load
+                end
+
+                return CreateFunction(function(...)
+                    local Line = {}
+
+                    local Spied = {}
+                    for i = 1, 5 do
+                        local var = GetVar()
+                        insert(Line, var)
+                        insert(Spied, Spy(var))
+                    end
+
+                    DefineVars(Line, `{Var}({BeautifyTuple(...)})`)
+
+                    return unpack(Spied)
+                end, Var)
+            end
+        end, Path)
+
+        return f
+    end
+
+    local Calls = 0
+
+    local function SafeWrap(Func, Path)
+        local Library = split(Path, ".")[1]
+
+	    local Func = CreateFunction(function(...)
+            Calls += 1
+
+		    local Args = pack(...)
+            local Old = table.clone(Args);
+            local Changed, ChangedButCanRun;
+
+            local function Scan(tbl, recursive)
+                for i, v in next, tbl do
+                    if Variables[v] and typeof(v) ~= "function" then
+                        local val = GetInternalValue(v)
+                        Metadata[val] = Metadata[v]
+                        tbl[i] = val
+
+                        if val == v then return true, false else return true, true end
+                        --if val == v then return true, false end
+                    end
+                    if typeof(v) == "table" and recursive then
+                        return Scan(v, true)
+                    end
+                end
+                
+                return false
+            end
+
+            Changed, ChangedButCanRun = Scan(Args);
+
+            if Changed then
+                if Path == "table.move" then return Func(unpack(Args)) end
+
+                local Start = #Output
+                local Value1 = `{Path}({BeautifyTupleOptions({ignore_funcs=true}, unpack(Old))})`
+                local Var = DefineVar(Value1)
+                local Now = #Output
+
+                local Values;
+                if ChangedButCanRun then
+                    Values = pack(Func(unpack(Args)))
+
+                    if Values.n ~= 1 then
+                        for i = Start, Now do
+                            Output[i] = nil
+                        end
+
+                        local Vars = {}
+                        local Fallbacks = {}
+
+                        for i = 1, Values.n do
+                            local v = GetVar()
+                            insert(Vars, v)
+                            insert(Fallbacks, FallbackValue(v, Values[i]))
+                        end
+
+                        DefineVars(Vars, Value1)
+                        return unpack(Fallbacks)
+                    end
+
+                    local v1 = Values[1]
+                    if Library == "table" and Path ~= "table.move" then return FallbackValue(Var, v1) end
+                    return v1
+                end
+
+                OpCountCheck();
+
+                if Library == "table" then
+                    for n = 1, Args.n do
+                        local a = Args[n]
+
+                        if typeof(a) == "table" and not Variables[a] then
+                            DefineTable(a, GetVar())
+                        end
+                    end
+                end
+
+                return Spy(Var)
+            end
+
+            return Func(unpack(Args))
+	    end, Path)
+        WrappedFuncs[Func] = true
+        CClosures[Func] = true
+        return Func
+    end
+
+    local Loadstring, load = CreateLoader("loadstring"), CreateLoader("load")
+
+    local TimeOffset = 0
+    local IgnoreFuncs = { getfenv = true, table = true, unpack = true }
+    local CompVars = {}
+
+    local function Comp(Symbol)
+        local function GetValue(x, y) -- raw value of lhs compared to rhs
+            if Symbol == ">" then return x > y
+            elseif Symbol == "<" then return x < y
+            elseif Symbol == ">=" then return x >= y
+            elseif Symbol == "<=" then return x <= y
+            elseif Symbol == "or" then return x or y
+            elseif Symbol == "and" then return x and y
+            end
+        end
+
+        return function(x, y, isYFunc, ...) --> Lhs, Rhs, { isFunction, isFunction }
+            local a, b = Variables[x], Variables[y]
+
+            local Var;
+            local Defined;
+            local IsOr, IsAnd = Symbol == "or", Symbol == "and"
+            local DoAppend
+            local function Def(A, B)
+                Defined = Defined or DefineVar(`({
+                    A or a or Beautify(x, nil, {ignore_funcs = true}
+                    )} {Symbol} {B or b or Beautify(y, nil, {ignore_funcs = DoAppend})})`)
+                return Defined
+            end
+
+            local X = GetInternalValue(x)
+            local ShouldReturn = (IsOr and X) or (IsAnd and not X)
+
+            DoAppend = not (isYFunc or typeof(X) == "function")
+            
+            local IsFenv = a == "fenv" or a == "getfenv" or b == "fenv" or b == "getfenv"
+
+            if (a or b)then-- and not IsFenv then
+                Def()
+                OpCountCheck()
+            end
+
+            if ShouldReturn then
+                return X
+            end
+
+            if isYFunc then y = y(...) end
+
+            x, y = X, GetInternalValue(y)
+
+            local Comp = CompVars[x] or CompVars[y]
+
+            if Comp then
+                local t = GetValue(x, y)
+                return FallbackValue(t and Comp or `not {Comp}`, t)
+            end
+
+            if not a and not b then return GetValue(x, y) end
+
+            local s, Value = pcall(GetValue, x, y)
+
+            if not s then Value = nil end
+
+            local mx, my = Metadata[x], Metadata[y]
+
+            if IsFenv then return Value end -- stupid getfenv checks
+
+            Var = Def()
+
+            OpCountCheck()
+
+            local isXn, isYn = typeof(x) == "number", typeof(y) == "number";
+
+            if (isXn or isYn) then
+                if Symbol == "and" and not IgnoreFuncs[a] then -- getfenv and 123
+                    if isYn then --> y = 123, x = getfenv (the function)
+                        CompVars[y] = a; -- [123] = "getfenv"
+                    end
+
+                    return FallbackValue(Var, Value);
+                elseif Symbol == "<" then
+                    if x == true and isYn then --> Ignore prometheus's silly checks
+                        return false;
+                    end
+                    
+                    return FallbackValue(`({Beautify(x)} < {Beautify(y)})`, Value)
+                end
+            end
+
+            if PotentialTypes[Value] == "function" or typeof(Value) == "function" then return Value end
+
+            local Spied = Spy(Var)
+            Metadata[Spied] = mx or my
+
+            SetInternal(Var, Value)
+
+            return Spied
+        end
+    end
+
+    local function SingleComp(Symbol) -- wont have to use real value here
+        local function GetValue(x)
+            if Symbol == "not" then return not x
+            elseif Symbol == "#" then return #x
+            elseif Symbol == "-" then return -x
+            end
+        end
+        
+        return function(x)
+            local a = Variables[x]
+
+            if a and a ~= "fenv" then
+                _360NoScope(a);
+
+                local Var = DefineVar(`{Symbol}{WhiteSpaceIfNeeded(Symbol)}{a}`)
+                local Internal = GetInternalValue(x)
+
+                OpCountCheck()
+
+                local success, value
+
+                SingleCompArth(a, Internal, Symbol)
+
+                if Internal == x and (Symbol == "#" or Symbol == "-") then -- Don't fire __len & __unm
+                    return FallbackValue(Var, value);
+                end
+
+                success, value = pcall(GetValue, Internal)
+
+                if not success then
+                    Comment(`unable to get value of {Var}, assigning to nil.`)
+                    value = nil
+                end
+
+                Comment(tostring(value)) -- Don't use Beautify, it's slower. use tostring since: The values can only be: a number & a boolean (and nil).
+
+                return FallbackValue(Var, value);
+            end
+
+            return GetValue(x)
+        end
+    end
+
+    local lphn = 4503599627370500 -- annoying number luraph uses
+
+    local function Eq(Symbol)
+        local function eq(a, b)
+            if Symbol == "==" then return a == b else return a ~= b end
+        end
+
+        return function(x, y)
+            local a, b = Variables[x] or Strings[x], Variables[y] or Strings[y]
+
+            local v1, v2;
+
+            if (y == lphn or a == "string.byte" or a == "type" or a == "string.char") then return Symbol == "~=" end
+
+            if not a and not b then return eq(x, y) end
+
+            local mx = Metadata[x] or {}
+            local my = Metadata[y] or {}
+
+            if mx.is_env or my.is_env then return eq(x, y) end -- ignore stupid getfenv() == checks
+
+            if a then _360NoScope(a) end
+            if b then _360NoScope(b) end
+
+            local Forced; -- Force a certain value
+
+            local Var = DefineVar(`({a or Beautify(x, nil, {ignore_funcs = true})} {Symbol} {b or Beautify(y, nil, {ignore_funcs = true})})`)
+
+            v1 = GetInternalValue(x) -- defaults to x
+            v2 = GetInternalValue(y) -- defaults to y
+
+            local V1Empty, V2Empty = v1 == "", v2 == ""
+            local V1String, V2String = typeof(v1) == "string", typeof(v2) == "string"
+
+            local Mt1, Mt2 = a and getmetatable(x), b and getmetatable(y)
+
+            local EQ, ARG1, ARG2;
+
+            if Mt1 then
+                EQ, ARG1, ARG2 = Mt1.__eq, y, x
+            elseif Mt2 then
+                EQ, ARG1, ARG2 = Mt2.__eq, x, y
+            end
+
+            if EQ then
+                local Value = EQ({Var, ARG2}, ARG1)
+                if Symbol == "==" then
+                    return Value
+                end
+                return not Value
+            end
+
+           -- print(x, Symbol, y, mx, my)
+
+            if mx.force_true or my.force_true then
+                Forced = Symbol == "=="
+            end
+
+            if Forced == nil then
+                if V1String and V2String then -- raw eq check
+                    if (mx.is_http or mx.is_property) or (my.is_http or my.is_property) then
+                        if V1Empty or V2Empty then
+                            Forced = Symbol == "~="
+                        else
+                            Forced = Symbol == "=="
+                        end
+                    else
+                        Forced = eq(v1, v2)
+                    end
+                elseif (V1String and v2) or (V2String and v1) and not Variables[v1] and not Variables[v2] then
+                    -- If v1 is a string and v2 isnt nil or v2 is a string and v1 isnt nil AND both aren't spied variables.
+
+                    if typeof(v1) == typeof(v2) then -- They're the same type, force the value (Like string and string)
+                        Forced = Symbol == "=="
+
+                        if (V1Empty and not V2String) or (V2Empty and not V1String) then -- x is empty and y isnt a string || y is empty and x isnt a string
+                            Forced = Symbol ~= "==" -- x == "" = false, x ~= "" = true
+
+                            PotentialTypes[Var] = "string"
+
+                            if a then PotentialTypes[a] = "string" end
+                            if b then PotentialTypes[b] = "string" end
+                        end
+                    else
+                        Forced = eq(v1, v2)
+                    end
+                end
+
+                local xType, yType = mx.is_type, my.is_type
+
+                if xType or yType then
+                    local chosen = xType and y or x
+
+                    if typeof(chosen) ~= "string" or (not find(LuauTypes, chosen) and not find(AdditionalTypes, chosen)) then
+                        Forced = Symbol ~= "==" -- it HAS to be false since the value isn't a string (or isn't a valid type)
+                    else
+                        local t = xType and v1 or v2 -- internal value for the type
+
+                        if typeof(t) == "string" then
+                            Forced = eq(t, chosen)
+                        else -- If the original type isn't a string somehow, just make it true.
+                            Forced = Symbol == "=="
+                        end
+                    end
+                elseif mx.is_property or my.is_property then
+                    Forced = Symbol == "=="
+                end
+            end
+
+            if Forced == nil then Forced = eq(v1, v2) end
+
+            Comment(Beautify(Forced))
+
+            local Spied = Spy(Var)
+            Metadata[Spied] = mx or my
+
+            SetInternal(Var, Forced)
+
+            OpCountCheck()
+
+            return Spied
+        end
+    end
+
+    local function Wait(x)
+        local rX = GetInternalValue(x)
+
+        if typeof(rX) == "number" then
+            TimeOffset += rX
+            return rX + WAIT_PER_FRAME
+        end
+    end
+
+    local TrueEnv = table.clone(getfenv(Dump))
+
+    local function GetMetatable(Path, Methods, md)
+        local mt = table.clone(getmetatable(Spy(Path)))
+
+        for i, v in next, Methods or {} do
+            mt[i] = v
+        end
+
+        local ahh = setmetatable({}, mt)
+
+        Variables[ahh] = Path
+        Metadata[ahh] = md
+        
+        return ahh
+    end
+
+    local function HookLib(Path, Extra)
+        local Lib = table.clone(TrueEnv[Path])
+
+        for i, v in next, Lib do
+            Lib[i] = SafeWrap(v, Index(i, Path))
+        end
+
+        for i, v in next, Extra or {} do Lib[i] = v end
+
+        Variables[Lib] = Path
+        SetInternal(Path, Lib)
+
+        setmetatable(Lib, {
+            __tostring = function() return Path end --> readable code
+        })
+
+        PotentialTypes[Path] = "table"
+
+        return table.freeze(Lib) --> so real?
+    end
+
+    local WHILE_LIMIT = 5_000_000 * 2
+    local REPEAT_LIMIT = 100_000 * 10
+    local REPEATS = 0
+
+    function DefineTable(tbl : table, Var : string, Ignore : boolean) : table?
+        if typeof(tbl) ~= "table" or Tables[getmetatable(tbl)] then return nil end
+
+        Define(Var, Beautify(tbl))
+
+        local oldmt = getmetatable(tbl)
+        local newmt = table.clone(getmetatable(Spy(Var)))
+
+        Variables[newmt] = nil
+
+        if oldmt and not Variables[tbl] or Ignore then return print("Already exists.", oldmt) end
+
+        local mt = setmetatable(tbl, newmt)
+
+        Variables[mt] = Var
+        Variables[tbl] = Var
+        Tables[mt] = Var
+
+        SetInternal(Var, tbl);
+
+        return mt
+    end
+
+    local Prometheus = {}
+    local Garbage = {}
+    local BaseString;
+
+    local NamecallMethod = nil;
+    local IsInNameCall;
+    local Locals = {}
+    local DoIgnoreLocals = {}
+
+    local function Iterate(x, Junk, SpiedVars)
+        Junk, SpiedVars = Junk or 0, SpiedVars or 0
+
+        for i, val in next, x do
+            if typeof(i) == "string" and not IsGarbageString(i) then
+                Junk -= 5 --> 1 correct string is better than 5 junk values
+            end
+
+            if ParamVars[val] then
+                OpCountCheck()
+
+                local Arg = `args{ArgsId}`
+                local Spied = Spy(Arg);
+                SetInternal(Arg, SpiedParams)
+                ParamVars[Spied] = true
+
+                return Spied;
+            end;
+
+            local Type = typeof(val);
+
+            if Type == "boolean" or Type == "number" or (Type == "string" and IsGarbageString(val)) then
+                Junk += 1
+            elseif Type == "function" then
+                Junk += 5
+            elseif Type == "table" then
+                local Var = Variables[val];
+                if Var and not WrappedFuncs[val] and not TrueEnv[Var] and Var ~= "fenv" then
+                    SpiedVars += 1
+                else
+                    --[[local X, y, z = Iterate(val, Junk, SpiedVars)
+                    if X then return X end
+                    Junk, SpiedVars = Junk + y, SpiedVars + z]]
+                    Junk += 1
+                end
+            end
+        end
+
+        return nil, Junk, SpiedVars
+    end
+
+    local TablesList = {}
+
+    local OldEnv = {
+        COMPL = Comp("<"),
+        COMPG = Comp(">"),
+        COMPLE = Comp("<="),
+        COMPGE = Comp(">="),
+        CHECKOR = Comp("or"),
+        CHECKUNM = SingleComp("-"),
+        CHECKLEN = SingleComp("#"),
+        CHECKNOT = SingleComp("not"),
+        CHECKAND = Comp("and"),
+        FUNC = function(f)
+            if Locals[f] then return Locals[f] end
+
+            local Var = DefineVar(Beautify(f))
+            SetInternal(Var, f)
+            local Spied = Spy(Var)
+
+            Locals[Spied] = f
+
+            return Spied
+        end,
+        --[[GET1 = function(tbl,val,x)
+            local IsStr = typeof(val) == "string"
+            if (Variables[val] and typeof(val) == "table" and not ParamVars[val]) or (IsStr and not IsGarbageString(val)) and not TablesList[tbl] then
+                TablesList[tbl] = true
+                if IsStr and not Strings[val] then --> Add to constants
+                    Strings[val] = true
+                    insert(StringsList, val)
+                end
+                
+                local Var, Junk, SpiedVars = Iterate(tbl)
+                if Var then return val end
+
+                local IsJunkTable = Junk > 0;
+
+                if IsJunkTable then
+                    local Ratio = SpiedVars / Junk --> If there's more SpiedVars than Junk, its not a junk table: 3 / 2 => yes
+
+                    if SpiedVars > Junk and Ratio <= 1 then
+                        IsJunkTable = false
+                    end
+                end
+
+                if not IsJunkTable then
+                    local Tbl = DefineVar(Beautify(tbl))
+                    x = x or "IDX"
+
+                    Define(Index(x, Tbl), Beautify(val), "__newindex")
+                end
+            end
+
+            return val
+        end,]]
+        GET = function(...)
+            --[[if Strings[val] then
+                return FallbackValue(Strings[val], val)
+            end]]
+            --if not Luraph and typeof(val) == "string" and not Strings[val] and not IsGarbageString(val) then
+            local val = ...
+
+            if not Luraph and typeof(val) == "string" and not IsGarbageString(val) then
+                local NoLastLetter = val:sub(1, -2)
+
+                if Strings[NoLastLetter] then --> This | This f, it shouldn't add.
+                    Undefine(Strings[NoLastLetter])
+                    Strings[NoLastLetter] = nil;
+                elseif Strings[val] then return ... end
+
+                Id += 1
+
+                local Var = "str_" .. Id
+
+                Define(Var, Beautify(val, nil, { no_strs = true }))
+
+                Strings[val] = Var
+            end
+
+            return ...
+        end,
+        CHECKINDEX = function(tbl, key)
+            local KeyPath = Variables[key]
+            local TblPath = Variables[tbl];
+            local TblValue = Tables[tbl];
+
+            if typeof(tbl) == "string" or tbl == BaseString then return BaseString[key]
+            elseif Garbage[tbl] then return tbl[key]
+            end;
+
+            if (TblPath and not TblValue) or KeyPath == "fenv" then
+                return tbl[key]
+            end
+
+            if typeof(key) == "string" and not IsGarbageString(key) then
+                local GarbagePoints = 0;
+                for i, v in tbl do
+                    local Type = typeof(v);
+                    if typeof(i) ~= "string" or IsGarbageString(i) then
+                        GarbagePoints += 1
+                    else
+                        if Variables[v] or Functions[v] or Type == "function" then GarbagePoints = math.huge break end
+
+                        GarbagePoints -= 1
+                    end
+                end
+
+                if GarbagePoints >= 0 or Variables[tbl] then
+                    Garbage[tbl] = true
+                    return tbl[key]
+                else
+                    local Var = DefineVar(Beautify(tbl));
+
+                    local oldmt = getmetatable(tbl)
+                    local newmt = getmetatable(Spy(Var))
+
+                    Variables[newmt] = nil --> It came from Spy()
+
+                    if oldmt then
+                        if not Variables[oldmt] then
+                            for i, v in next, oldmt do
+                                local old = newmt[i];
+                                newmt[i] = typeof(v) == "function" and function(...)
+                                    if old then
+                                        old(...)
+                                    end
+
+                                    return v(...)
+                                end or v;
+                            end
+                        end
+                    end
+
+                    setmetatable(tbl, newmt)
+
+                    Variables[tbl] = Var
+
+                    table.clear(tbl); --> So tbl.key = val appears.
+
+                    return tbl[key]
+                end
+            end
+
+            if (KeyPath or TblValue) then
+                local _key = key;
+                key = GetInternalValue(key)
+
+                OpCountCheck()
+
+                local Value;
+                if TblPath then
+                    Value = rawget(tbl, key)
+                else
+                    Value = tbl[key]
+                end
+
+                Id += 1
+
+                local TableVar = "tbl" .. Id .. Suffix
+                DefineTable(tbl, TableVar, true)
+
+                if not (typeof(_key) == "number" and Value) then
+                    local Var = DefineVar(Index(_key, TableVar))
+
+                    local md = Metadata[_key] or {}
+                    if md.is_important then
+                        -- get the first key
+                        local k, type = nil, typeof(key);
+                        for i, v in next, tbl do
+                            if typeof(i) == type or typeof(v) == type then
+                                k = v
+                                return FallbackValue(Var, k)
+                            end
+                        end
+                    end
+                end
+
+                --SetInternal(Var, Value) -- tbl = {[y] = 3} and tbl = {["1"] = 3} support
+
+                --return Spy(Var)
+                return Value--FallbackValue(Var, Value)
+            end
+
+            return tbl[key]
+        end,
+        CONSTRUCT = function(tbl)
+            local count = #tbl;
+
+            local IsJunkTable = true;
+
+            local Val, Junk, SpiedVars = Iterate(tbl);
+            if Val then return Val end --> Spied variables
+
+            if getmetatable(tbl) or count >= 100 or (SpiedVars == 0 and Junk >= 0) then insert(Gc, tbl) return tbl end
+                --> Table too large or has a metatable
+            IsJunkTable = Junk > 0;
+
+            if IsJunkTable then
+                local Ratio = SpiedVars / Junk --> If there's more SpiedVars than Junk, its not a junk table: 3 / 2 => yes
+
+                if SpiedVars > Junk and Ratio <= 1 then
+                    IsJunkTable = false
+                end
+            end
+
+            if IsJunkTable then insert(Gc, tbl) return tbl end
+
+            OpCountCheck()
+
+            local Beautified = Beautify(tbl)
+            Id += 1
+            local Var = "tbl_" .. Id
+            Define(Var, Beautified)
+
+            local spiedmt = GetMetatable(Var, {
+                __index = function(_, Key)
+                    local Indexed = Index(Key, Var)
+                    local v2 = GetVar()
+
+                    local Value = rawget(tbl, Key)
+
+                    -- if the key ISNT a number (then def do it, otherwise ONLY if the value doesnt exist)
+
+                    Append(`local {v2} = {Indexed}`)
+
+                    --[[local Spied = Spy(v2)
+
+                    Variables[Spied] = v2
+                    SetInternal(v2, GetInternalValue(Value))]]
+
+                    return GetInternalValue(Value)
+                    --return Spied
+                end
+            })
+
+            local n = table.clone(tbl);
+            --setmetatable(tbl, spiedmt)
+            local mt = spiedmt;
+
+            Variables[mt] = Var
+            Tables[mt] = Var
+
+            SetInternal(Var, n)
+
+            return tbl--mt
+        end,
+        checkwhile = function(x, id) -- the check used inside the loop itself (ignore variables because spying them will be really slow)
+            local Var = Variables[x]
+            local Loop = Looped[id]
+
+            --if Loop == "abort" then print("bye 3mo..") return end;
+
+            if (Var) and not Loop then
+                Append(`while {Var} do`)
+                AddNest()
+                WaitingEnds.whiles += 1
+
+                Looped[id] = { x, #Output }
+            end
+
+            WhileCount += 1
+
+            if WhileCount >= WHILE_LIMIT then
+                Append(`while {x} do end -- exited this loop due to it having {WHILE_LIMIT} iterations.`)
+                error("too many iterations")
+            end
+
+            return GetInternalValue(x)
+        end,
+        checkwhileend = function(x)
+            local cId = Looped[x]
+
+            if cId and WaitingEnds.whiles > 0 and #Output ~= cId[2] then 
+                Looped[x], WaitingEnds.whiles = "abort", WaitingEnds.whiles - 1
+
+                return CloseStatement()
+            end
+        end,
+        CHECKIF = function(x, id, hasElseN)
+            local Var = Variables[x]
+
+            if Var then
+                local hasElse = hasElseN == 1;
+                local Value = GetInternalValue(x)
+                
+                ExprId += 1
+
+                local Hook = Hooks[ExprId]
+                local HookExists = Hook ~= nil
+
+                local willrun = Value
+
+                if HookExists then willrun = Hook end
+
+                WaitingEnds.ifs += ((willrun or hasElse) and 1 or 0)
+
+                _360NoScope(Var);
+
+                if Settings.neverNester and willrun then
+                    Append(`if not ({Var}) then return; end`)
+                    WaitingEnds.ifs -= 1
+                else
+                    Append(`if {Var} then`) --> tostring(x) to trigger __tostring in case its a param
+                    AddNest()
+                    InlineComment(`{willrun and "ran" or "didnt run"}, expr id {ExprId}` .. (hasElse and willrun and ", had an 'else' but never ran." or ""))
+                end
+
+                if not willrun then
+                    if Settings.neverNester then
+                        Append("return;")
+                        AddNest(-1)
+                        Append("end")
+                        WaitingEnds.ifs -= 1
+                    else
+                        if hasElse then
+                            AddNest(-1)
+                            Append("else")
+                            AddNest()
+                        else
+                            CloseStatement(nil, true)
+                        end
+                    end
+                end
+
+                for i, v in next, Ids do
+                    Ids[i] = {
+                        v[1],
+                        #Output
+                    } -- Nested if checks do not count as more operations. (v[2] + #Output - v[2] = #Output)
+                end
+
+                for i, v in next, Looped do
+                    if typeof(v) == "string" then Looped[i] = v continue end
+                    
+                    Looped[i] = {
+                        v[1],
+                        #Output
+                    }
+                end
+
+                if willrun or hasElse then
+                    -- if the thing ran, add an else if it exists, if the thing didnt run, don't add an else because its already added.
+                    Ids[id] = { x, #Output } -- thing, thing, should add else
+                end
+
+                if Hook ~= nil then
+                    return Hook
+                else
+                    return willrun
+                end
+            end
+
+            return x
+        end,
+        checkifend = function(id)
+            local cId = Ids[id]
+
+            if cId and WaitingEnds.ifs > 0 and #Output ~= cId[2] then
+                Ids[id], WaitingEnds.ifs = nil, WaitingEnds.ifs - 1
+                return CloseStatement(nil, true)
+            end
+        end,
+        CHECKEQ = Eq("=="),
+        CHECKNEQ = Eq("~="),
+        CALL = function(f, ...)
+            --[[local Local = Locals[f]
+            if Local and not DoIgnoreLocals[Local] then
+                if select("#", ...) == ParamCount + 1 then
+                    DoIgnoreLocals[Local] = true
+                    return Local(...);
+                end
+
+                Append(`{Variables[f]}({BeautifyTuple(...)})`)
+            end]]
+
+            if not f then
+                Append(`--[[ {Beautify(f)}({BeautifyTuple(...)})]]`)
+                error("attempt to call a nil value")
+            end
+
+            if CallHandler then
+                return CallHandler(f, Variables[f], ...)
+            end
+
+            local t = FuncHooks[f]
+            if t then
+                Append(`({Beautify(f)})({BeautifyTuple(...)})`)
+                InlineComment("The original function used here was hooked.")
+                return t(...)
+            end
+
+            return f(...)
+        end,
+        NAMECALL = function(f, method, ...) --> implement later
+            local hooks = HookMetaMethods[f]
+
+            if NamecallHandler then
+                NamecallHandler(Variables[f], method, ...)
+            end
+
+            if hooks and hooks.__namecall then
+                local Thing = `{Beautify(f)}:{method}({BeautifyTuple(...)})`
+                DefineVar(Thing)
+
+                NamecallMethod, IsInNameCall = method, true
+
+                local values = pack(hooks.__namecall(f, ...))
+
+                IsInNameCall = false
+
+                return unpack(values);
+            end
+            
+            local func = f[method]
+
+            if not func then
+                Append(`--[[ {Beautify(f)}:{method}({BeautifyTuple(...)}) ]]`)
+                error(`attempt to call missing method '{method}' of table`, 18)
+            end
+
+            return func(f, ...)
+        end,
+        TEMPLATE_STRING = function(str, ...)
+            --[[
+                TEMPLATE_STRING("%s", x) = `{x}`
+            ]]
+            local args = pack(...)
+            local code = "`"
+
+            for i, v in next, split(str, "%s") do
+                local finishedArgs = args.n < i
+                if finishedArgs then
+                    code = code .. v -- its a string
+                else
+                    code = code .. format("%s{%s}", v, Beautify(args[i]))
+                end
+            end
+
+            code = code .. "`"
+
+            local Var = DefineVar(code)
+
+            PotentialTypes[Var] = "string"
+            for _, v in next, args do
+                if Variables[v] then
+                    return Spy(Var)
+                end
+            end
+
+            SetInternal(Var, format(str, ...))
+
+            return Spy(Var)
+        end,
+        REPEAT = function(x) -- repeat ... until REPEAT(n)
+            REPEATS += 1
+            if REPEATS >= REPEAT_LIMIT then
+                Comment(`a 'repeat ... until {x()}' loop was exited here. ({REPEATS} iterations detected)`)
+                REPEATS = 0
+                return true;
+            end
+            x = x();
+            if Variables[x] then
+                Append(`repeat\n{Tab}{_tab}-- ...\n{Tab}until {x}`)
+                return true;
+            end
+
+            return x;
+        end,
+        FORINFO = function(id, start, final, increment) --> We cant edit anything here, we just store the values.
+            local vStart = Variables[start] or Variables[GetInternalValue(start)]
+            local vFinal = Variables[final] or Variables[GetInternalValue(final)]
+            local vIncrement = Variables[increment] or Variables[GetInternalValue(increment)]
+
+            local value = {
+                start, final, increment,
+                vStart,
+                vFinal,
+                vIncrement
+            };
+
+            if vStart or vFinal or vIncrement then
+                local Var, finalPart = GetVar(), (increment == 1 and "" or `, {vIncrement or Beautify(increment or 1)}`)
+                Append(`for {Var} = {vStart or Beautify(start)}, {vFinal or Beautify(vFinal)}{finalPart} do`)
+                
+                value[7], WaitingToClose[id], WaitingEnds.forloops = Var, true, WaitingEnds.forloops + 1;
+                AddNest()
+            end
+
+            ForLoops[id] = value
+        end,
+        FORSTEP1 = function(id)
+            local Loop = ForLoops[id]
+
+            return Loop[4] and 1 or Loop[1]
+        end,
+        FORSTEP2 = function(id)
+            local Loop = ForLoops[id]
+
+            return Loop[5] and 1 or Loop[2]
+        end,
+        FORSTEP3 = function(id)
+            local Loop = ForLoops[id]
+            local Var = Loop[7]
+            if Var then
+                return setmetatable({}, { __add = function() return Spy(Var) end })
+            end
+            return 0
+        end,
+        FOREND = function(Id)
+            if WaitingToClose[Id] then
+                WaitingEnds.forloops -= 1
+                CloseStatement()
+                WaitingToClose[Id] = nil
+            end
+        end
+    }
+
+    if Original then 
+        for i, v in next, OldEnv do
+            BaseEnv[CallId .. i] = v
+        end
+    end
+
+    for i in BaseEnv do
+        SetInternal(i, nil)
+
+        Prometheus[i] = true
+    end
+
+    local function Scan(t, v, Var)
+        v = v or {}
+        if v[t] then return end
+        v[t] = true
+    
+        for k, val in next, t do
+            if Variables[k] or Variables[val] then return true end
+            if type(val) == "table" and Scan(val, v) then return true end
+            if type(k) == "table" and Scan(k, v) then return true end
+        end
+    end
+
+    local Gets = 0
+    local function safeHttpGet(self, url, everything)
+        if urlCache[url] then return urlCache[url] end
+        if not Settings.isPremium and not top_level.messages.http then
+            top_level.messages.http = "Since you're using this product for free, HttpGets are not available as it sends a request to our server which is resource-consuming; if you want to crack key systems, bypass sanity checks, bypass key systems, the premium option is for you (#buy-premium on our discord)."
+        end
+
+        if typeof(url) == "string" and match(url, "https?://") and Gets <= 5 and Settings.isPremium then
+            for _, Url in next, ignored_urls do
+                if url:match(Url) then
+                    return Spy(self[2], nil, {is_http=true})
+                end
+            end
+
+            Gets += 1
+
+            local req;
+            local success = pcall(function()
+                local Headers = {
+                    ["Roblox-Id"] = GenerateId(15),
+                    ["Traceparent"] = GenerateId(55),
+                    ["User-Agent"] = "RobloxStudio/WinInet RobloxApp/0.682.0.6820537 (GlobalDist; RobloxDirectDownload)",
+                    ["Content-Type"] = "application/json"
+                }
+
+                local Data = {
+                    url = API_URL,
+                    method = "POST",
+                    body = serde.encode("json", {udcheck = "hello123", url = url})
+                }
+                Data.headers = Headers
+
+                req = net.request(Data);
+            end)
+
+            local result;
+            if false and everything then
+                result = {
+                    Headers = table.clone(req.headers or {}),
+                    Body = req.body,
+                    Success = req.ok,
+                    StatusCode = req.statusCode
+                }
+                result.Headers["x-vercel-cache"] = nil
+                result.Headers["x-vercel-id"] = nil
+
+                for i, v in next, result do
+                    local Idx = Index(i, self[2])
+                    SetInternal(Idx, v)
+                    result[i] = Spy(Idx)
+                end
+            elseif req then
+                result = req.body
+            end
+
+            if success and result then
+                local doc = "<!DOCTYPE html>"
+                if result:sub(1, #doc) == doc then --> html
+                    result = Spy(self[2])
+                    urlCache[url] = result
+                    Comment("The result here returned an HTML file so we're just spying it instead.")
+                    return result
+                end
+
+                urlCache[url] = result;
+
+                if not Settings.hookOp then -- Raw values
+                    Metadata[result] = {is_http = true}
+                    return result;
+                end
+
+                return FallbackValue(self[2], result, {is_http=true})
+            end
+        end
+
+        local Spied = Spy(self[2], nil, {is_http=true})
+        urlCache[url] = Spied
+                
+        return Spied
+    end
+
+    local MethodHooks = {
+        RunService = {
+            IsStudio = function(self) return false end
+        },
+        HttpService = {
+            JSONEncode = function(self, x)
+                x = GetInternalValue(x)
+
+                local Var = self[2]
+
+                if Variables[x] or typeof(x) ~= "table" or Scan(x) then
+                    return Spy(Var)
+                end
+
+                return FallbackValue(Var, serde.encode("json", x))
+            end,
+            JSONDecode = function(self, x)
+                x = GetInternalValue(x)
+                
+                local Var = self[2]
+
+                if Variables[x] or typeof(x) ~= "string" then
+                    return Spy(Var)
+                end
+
+                local Value = serde.decode("json", x); -- can error
+
+                return FallbackValue(Var, Value)
+            end
+        },
+        TeleportService = {
+            GetLocalPlayerTeleportData = function()return nil;end
+        },
+        DataModel = {
+            HttpGet = safeHttpGet
+        },
+        RbxAnalyticsService = {
+            GetClientId = function(self)
+                local Var = self[2]
+
+                PotentialTypes[Var] = "string"
+
+                return FallbackValue(Var, HardwareId, {is_property = true})
+            end
+        },
+        ["*"] = {}
+    }
+
+    MethodHooks.DataModel.HttpGetAsync = MethodHooks.DataModel.HttpGet
+
+    local PropertyHooks = {
+        DataModel = {}
+    }
+
+    local AllAllowed = {
+        "ReplicatedStorage",
+        "ReplicatedFirst",
+        "RobloxReplicatedStorage",
+        "CoreGui",
+        "Model",
+        "TextChatService",
+        "Player",
+        "Backpack"
+    }
+
+    if Original then
+        local function GetData(Table, ListV1) -- Add Instance methods & properties to a table
+            for Key, List in next, ListV1 or InstanceClass do -- Key = "Members" List = MembersListOfInstanceClass
+                local Tuple = Table[Key] or {}
+
+                for i, v in next, List do
+                    Tuple[i] = v
+                end
+            end
+            return Table
+        end
+
+        for key, value in next, Classes.ServiceProvider do
+            local Object = Classes.DataModel[key]
+            for i, v in value do
+                Object[i] = v;
+            end
+        end
+
+        Services.DataModel = Classes.DataModel;
+
+        local function GetProperType(Property)
+            local StrType = ""
+
+            if Property.Category == "Primitive" then
+                local Name = Property.Name
+                StrType = ({bool = "boolean", float = "number", int = "number", int64 = "number"})[Name] or Name
+            end
+
+            return StrType
+        end
+
+        local game;
+        local allowedProps = {
+            Text = GenerateId(8),
+            PlaceId = GenerateProperty({
+                Category = "primitive",
+                Name = "number"
+            }),
+            JobId = GenerateGUID(),
+            GameId = GenerateProperty({
+                Category = "primitive",
+                Name = "number"
+            })
+        }
+
+        local function CreateInstance(Class, Name, EnableCache)
+            if Class == "CoreGui" or Class == "ScreenGui" then if Settings.ui_detection and IsInLoadstring > 0 then IsUI = true error("UI detected!") end end
+
+            if EnableCache and Instances[Class] then return Instances[Class] end;
+
+            local Created = Instance.new(Class)
+            local IsService = Services[Class]
+            local Service = GetData(IsService or Classes[Class] or {})
+
+            Created.Name = Class
+
+            if Class == "Player" then Created.Name = GenerateId(12) end
+
+            local Properties, methods, Events, Callbacks = Service.properties, Service.methods, Service.events, Service.callbacks or {}
+            local ChangedEvents = {}
+            local Sigs = {}
+
+            -- Each child can only have ONE of the same signal but multiple connections, for example:
+            -- .ChildAdded is a signal, which it can ONLY have 1 of
+            -- But .ChildAdded:Connect is a RBXScriptConnection, which it can have multiple of.
+
+            CreateSignal = CreateSignal or function(Variable, Callback, Signals, Alias) -- Variable should already be defined
+                -- Alias = what to use in DefineVar()
+                local Keys = { "Connect", "ConnectParallel", "Wait", "Once", "Disconnect", "connect", "connectparallel", "wait", "disconnect" }
+                local Table = {}
+
+                for _, Key in next, Keys do
+                    Table[Key] = CreateFunction(function(_, Function)
+                        OpCountCheck()
+
+                        local First = Alias or Variable
+                        
+                        local Var = DefineVar(`{First}:{Key}({Function and Beautify(Function, nil, { bypass_beautify = true }) or ""})`)
+                        PotentialTypes[Var] = "RBXScriptConnection"
+
+                        if Callback then Callback(_, Function) end
+                        Key = lower(Key)
+                        local Spied = Spy(Var)
+
+                        if Key == "connect" or Key == "connectparallel" then
+                            local Value = Connections[Variable] or {}
+                            local ConnectionIdx = #Value + 1
+                            local tbl = {
+                                Enabled = true,
+                                ForeignState = false,
+                                LuaConnection = true,
+                                Function = Function,
+                                Thread = coroutine.create(Function)
+                            }
+                            tbl.Disable = function() tbl.Enabled = false end
+                            tbl.Enable = function() tbl.Enabled = true end
+                            tbl.Fire = function(...)
+                                local o = Output
+                                Output = {}
+                                local Values = pack(Function(...))
+                                local l = Output
+                                Output = o
+
+                                local Vars = {}
+                                local Fallbacks = {}
+
+                                for i = 1, max(Values.n, 1) do
+                                    local V = GetVar()
+                                    insert(Vars, V)
+                                    insert(Fallbacks, FallbackValue(V, Values[i]))
+                                end
+
+                                DefineVars(Vars, `{tbl.Var}.Fire({BeautifyTuple(...)})`)
+
+                                for _, v in next, l do
+                                    Append(v)
+                                end
+                                return unpack(Fallbacks)
+                            end
+                            tbl.Disconnect = function(self)
+                                if not self then return end
+
+                                self.Connected = false
+                                if Value[ConnectionIdx] then table.remove(Value, ConnectionIdx) end
+                            end
+                            tbl.Defer = function(self, ...)
+                                return Task.defer(Function, ...)
+                            end
+
+                            local mt = setmetatable({}, {
+                                __index = function(_, Key)
+                                    local Var = DefineVar(Index(Key, Var))
+                                    local Value = rawget(tbl, Key)
+                                    if typeof(Value) == "function" then
+                                        return CreateFunction(function(...)
+                                            DefineVar(`{Var}({BeautifyTuple(...)})`)
+                                            return Value(_, ...)
+                                        end, Var)
+                                    end
+                                    return Value;
+                                end
+                            })
+
+                            Variables[mt] = Var
+                            Value[ConnectionIdx] = mt;
+
+                            Connections[Variable] = Value
+                            SetInternal(Var, mt);
+                        end
+
+                        return Spied
+                    end, Index(Key, Variable))
+                end
+
+                local Metatable = setmetatable(Table, {
+                    __metatable = "This metatable is locked.",
+                    __index = function(_, Key)
+                        local Var = DefineVar(Index(Key, Variable))
+
+                        return Spy(Var)-- error(`{Key} is not a valid member of RBXScriptSignal`)
+                    end,
+                    __newindex = error,
+                    __iter = error,
+                    __tostring = function() return Variable end
+                })
+
+                Variables[Metatable] = Variable
+                PotentialTypes[Variable] = "RBXScriptSignal"
+
+                if Signals then
+                    local SignalName = split(Variable, ".")
+                    Signals[SignalName[#SignalName]] = Variable
+                end
+
+                return Metatable
+            end
+
+            local Metatable;
+            Metatable = GetMetatable(Name, {
+                __index = function(Vars, Key)
+                    local ToUse = Key;
+                    Key = GetInternalValue(Key);
+                    OpCountCheck();
+                    _360NoScope(Name);
+
+                    local Kids = Children[Metatable]
+
+                    local Indexed = Index(ToUse, Name)
+
+                    local Var, Method, FuncMethod = Indexed, methods[Key], (MethodHooks[Class] or {})[Key] or MethodHooks["*"][Key];
+                    local Property = Properties[Key]
+
+                    local PropertyHook = (PropertyHooks[Class] or {})[Key]
+
+                    if not Method and not FuncMethod and not Events[Key] then
+                        if not Variables[Vars] then
+                            Var = Vars[1]
+                            Define(Var, Indexed)
+                        else
+                            Var = DefineVar(Indexed)
+                        end
+                        IndexValues[Var] = { Name, Key }
+                    end -- Since the index added 1 (GetMetatable)
+
+                    local P = Predefined[Key]
+                    if P then
+                        return FallbackValue(Var, P[1])
+                    end
+
+                    if Key == "Parent" or Key == "parent" then -- fix the 'Parent' check
+                        for n, Parent in Children do
+                            if find(Parent, Metatable) then
+                                return FallbackValue(Var or Indexed, n);
+                            end
+                        end
+                        return FallbackValue(Var or Indexed, nil);
+                    end
+
+                    if Kids then
+                        for _, Child in next, Kids do
+                            if Key == Cached[Child].Name then
+                                return Child
+                            end
+                        end
+                    end
+                    if PropertyHook then return PropertyHook end -- Hooked property
+
+                    local Success, Value = pcall(function()
+                        if Method or FuncMethod then
+                            return CreateFunction(function(...)
+                                OpCountCheck();
+
+                                local Args = {...}
+                                local Arg1 = Args[1]
+
+                                local IsSelf = Variables[Arg1] == Name
+                                local Index = IsSelf and 2 or 1
+
+                                local Path = IsSelf and `{Name}:{Key}` or `{Name}.{Key}`
+                                local Out = DefineVar(`{Path}({BeautifyTuple(select(Index, ...))})`)
+
+                                if FuncMethod then
+                                    local Result = FuncMethod({Arg1, Out}, select(2, ...))
+                                    return Result
+                                end
+
+                                local ReturnType = Method.ReturnType or {}
+                                local Type = GetProperType(ReturnType)
+                                local Value = {}; -- 1 = Modified, 2 = Value
+
+                                if ReturnType.Category == "DataType" and ReturnType.Name == "RBXScriptSignal" then
+                                    local P = `{Name}.{Key}`
+                                    if Key == "GetPropertyChangedSignal" then
+                                        ChangedEvents[P] = Args[2]
+                                    end
+                                    return CreateSignal(P, nil, Sigs, Out) -- If it's a signal, don't make it a namecall.
+                                end
+
+                                if Type ~= "" then PotentialTypes[Out] = Type end
+
+                                if Key == "IsA" then
+                                    Value = { true, InstanceFunctions.IsA(Class, Args[2]) }
+                                end
+
+                                if Value[1] then SetInternal(Out, Value[2]) end
+
+                                return Spy(Out)
+                            end, Indexed)
+                        end
+
+                        return Created[Key]
+                    end)
+
+                    if FuncMethod then return Value end
+
+                    if Events[Key] then
+                        return CreateSignal(Indexed, nil, Sigs)
+                    end
+
+                    if Class == "DataModel" and (Classes[Key] or Services[Key]) then
+                        return Instances[Key] or CreateInstance(Key, Var)
+                    end
+
+                    local ActualValue = allowedProps[Key]
+
+                    if ActualValue then
+                        return FallbackValue(Var, ActualValue, { is_property = true, is_important = true })
+                    end
+
+                    if (Value == nil or not Success) and Property then
+                        if Property.ValueType.Category == "Class" then
+                            return CreateInstance(Property.ValueType.Name, Var, IsService and true or false)
+                        end
+                        
+                        -- Stuff like strings and numbers
+                        return FallbackValue(Var, GenerateProperty(Property.ValueType))
+                    end
+
+                    if Success then
+                        if typeof(Value) == "Instance" then -- Sandbox immediately.
+                            Value = Instances[Value.ClassName] or CreateInstance(Value.ClassName, Var) -- May be REALLY stupid?
+                        elseif typeof(Value) == "function" then
+                            return CreateFunction(function(Self, ...)
+                                local Var = DefineVar(`{Beautify(Self)}({BeautifyTuple(...)})`)
+                                Comment("this call returned a spied variable (Because the real method was found inside an instance)")
+
+                                return Spy(Var)
+                            end, Indexed)
+                        elseif Functions[Value] then
+                            return Value
+                        end
+
+                        Var = Var or Indexed
+                        local t = typeof(Value)
+                        PotentialTypes[Var] = t
+
+                        if Settings.debug then InlineComment(Beautify(Value)) end
+
+                        return FallbackValue(Var, Value)
+                    end
+
+                    local Self = Metadata[Metatable] or {}
+                    if (Self.was_created or Class == "DataModel") and not Variables[Key] then
+                        error(`{Key} is not a valid member of {Class} '{Created.Name}'`)
+                    end
+
+                    if find(AllAllowed, Class) or Variables[Key] then
+                        local Returned = Spy(Var or DefineVar(Indexed))
+                        PotentialTypes[Returned] = "Instance"
+                        return Returned;
+                    end
+
+                    if Settings.hookOp and Class ~= "DataModel" then
+                        return FallbackValue(Indexed, nil)
+                    end
+
+                    --return Spy(Indexed);
+                end,
+                __newindex = function(Self, Key, Value)
+                    local function FireAll(ParentSignals, OnRemoving)
+                        if not ParentSignals then return end;
+
+                        local ToFire = OnRemoving and {ParentSignals.ChildRemoved, ParentSignals.DescendantRemoved} or {ParentSignals.ChildAdded, ParentSignals.DescendantAdded}
+                        -- add AncestryChanged later
+
+                        for _, Sig in next, ToFire do
+                            if not Sig then continue end
+
+                            local ConnectionsList = Connections[Sig]
+                            if not ConnectionsList then continue end
+
+                            for _, v in ConnectionsList do v.Function(Self) end -- Fire all connections
+                        end
+                    end
+
+                    if Key == "Parent" then
+                        local OldParentSignals = Signals[Parents[Self]]
+                        -- Value is Parent
+                        Parents[Self] = Value;
+
+                        FireAll(OldParentSignals, true)
+                        FireAll(Signals[Value])
+
+                        if Variables[Value] then -- if its a spied value, for example 'nil' would be ignored.
+                            Children[Value] = Children[Value] or {}
+                            insert(Children[Value], Self)
+                        else -- Since it's being reparented, it'll no longer be a child of whatever it was a child of.
+                            for _, Parent in next, Children do
+                                local n = find(Parent, Self)
+                                if n then
+                                    table.remove(Parent, n)
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    local Property = Properties[Key]
+                    local Callback = Callbacks[Key]
+
+                    Property = Property or Callback
+
+                    -- If the object is a callback, then it HAS to be a function.
+
+                    Append(`{Index(Key, Name)} = {Beautify(Value, nil, {ignore_funcs = not Callback})}`)
+
+                    Value = GetInternalValue(Value)
+
+                    if not Variables[Value] then
+                        assert(Property, `'{Key}' is not a valid member of {Class} '{Created.Name}'`)
+
+                        local ValueType = Property.ValueType or {}
+                        if find(Property.Tags or {}, "ReadOnly") then error(`Unable to assign property {Key}. Property is read only`) end
+                        if ValueType.Category == "Primitive" and GetProperType(ValueType) ~= type(Value) then
+                            error(`Unable to assign property {Key}. {ValueType.Name} expected, got {type(Value)}`)
+                        end
+                    end;
+
+                    local ChangedEvent = (Signals[Self] or {}).Changed
+                    if ChangedEvent then
+                        for _, Connection in next, Connections[ChangedEvent] or {} do
+                            Connection.Function(Key)
+                        end
+                    end
+
+                    local PropChanged = (Signals[Self] or {}).GetPropertyChangedSignal
+                    if PropChanged and ChangedEvents[PropChanged] == Key then
+                        for _, Connection in next, Connections[PropChanged] or {} do
+                            Connection.Function(Key)
+                        end
+                    end
+
+                    pcall(function() Created[Key] = Value end)
+                end
+            })
+
+            Signals[Metatable] = Sigs
+
+            Instances[Class] = Instances[Class] or Metatable
+            PotentialTypes[Name] = "Instance"
+            Cached[Metatable] = Created
+
+            if IsService and game and Class ~= "DataModel" then
+                local Val = Children[game] or {}
+                insert(Val, Metatable)
+
+                Children[game] = Val
+                Parents[Metatable] = game
+            end
+
+            if Class == "LocalScript" or Class == "ModuleScript" then
+                insert(RunningScripts, Metatable)
+            end
+
+            return Metatable
+        end
+
+        MethodHooks.DataModel.GetService = function(_, service) -- scuffed af
+            assert(Services[service], `Service "{service}" is not a valid Service name`)
+            local Var = Variables[Instances[service]]
+            if Var and _[2] ~= Var or not Var then
+                return CreateInstance(service, _[2])
+            end
+            
+            local a = Instances[service]
+            if a then return a end
+        end
+        MethodHooks.DataModel.getService = MethodHooks.DataModel.GetService
+        MethodHooks.DataModel.FindService = function(_, service)
+            if not Services[service] then return nil end;
+
+            return MethodHooks.DataModel.GetService(_, service);
+        end
+        MethodHooks.DataModel.FindFirstChildOfClass = MethodHooks.DataModel.GetService
+        MethodHooks.DataModel.FindFirstChildWhichIsA = MethodHooks.DataModel.GetService
+
+        local function GetAncestor(Self, Class)
+	        local Parent = Parents[Self]
+	        while Parent do
+		        local Real = Cached[Parent]
+		        if Real and Real:IsA(Class) then -- Using :IsA directly instead of InstanceFunctions.IsA is faster?
+			        return Parent
+		        end
+		        Parent = Parents[Parent]
+	        end
+        end
+
+        MethodHooks["*"].FindFirstChild = function(Self, Name, Recursive)
+            local Var = Self[2]
+            local Parent = Self[1]
+            local Real = Cached[Parent]
+
+            if Real and find(AllAllowed, Real.ClassName) then
+                return Spy(Var)
+            end
+
+            local Kids = Children[Parent]
+            local Value;
+
+            if Kids then
+                for _, Kid in next, Kids do -- Add resurcive maybe later
+                    if Cached[Kid].Name == Name then
+                        Value = Kid
+                        break
+                    end
+                end
+            end
+
+            return FallbackValue(Var, Value)
+        end
+        MethodHooks["*"].Destroy = function(Self) -- Deletes all parents & stuff
+            local Child = Self[1]
+            for _, Parent in next, Children do
+                local n = find(Parent, Child)
+                if n then
+                    table.remove(Parent, n)
+                end
+            end
+        end
+        MethodHooks["*"].Clone = function(Self)
+            local Child = Self[1]
+            local Real = Cached[Child]
+
+            if not Real then return Spy(Self[2]) end
+
+            local Duplicate = CreateInstance(Real.ClassName, Self[2])
+            return Duplicate
+        end
+        MethodHooks["*"].FindFirstAncestorWhichIsA = function(Self, Class)
+            local Ancestor = GetAncestor(Self[1], Class)
+            return FallbackValue(Self[2], Ancestor)
+        end
+        MethodHooks["*"].FindFirstAncestorOfClass = MethodHooks["*"].FindFirstAncestorWhichIsA
+
+        BaseEnv.game = CreateInstance("DataModel", "game")
+        BaseEnv.Game = CreateInstance("DataModel", "Game")
+
+        game = BaseEnv.game
+
+        BaseEnv.workspace = CreateInstance("Workspace", "workspace")
+        BaseEnv.Workspace = CreateInstance("Workspace", "Workspace")
+
+        BaseEnv.script = CreateInstance("LocalScript", "script")
+
+        BaseEnv.UserSettings = function()
+            return Instances.UserSettings or CreateInstance("UserSettings", DefineVar("UserSettings()"))
+        end
+
+        BaseEnv.cloneref = function(Object)
+            if not Variables[Object] then
+                return error("invalid argument #1 to 'cloneref'")
+            end
+
+            local Var = DefineVar(`cloneref({Beautify(Object, nil, {ignore_funcs = true})})`)
+
+            return FallbackValue(Var, Object);
+        end
+        
+        local InstanceLib = {
+            new = function(Class, Parent)
+                Class = GetInternalValue(Class)
+
+                local Type = Typeof(Class)
+                local Var = DefineVar(`Instance.new({Beautify(Class)})`)
+
+                if Variables[Class] then return Spy(Var) end;
+
+                if Type ~= "string" then
+                    error(`invalid argument #1 to 'new' (string expected, got {Type})`)
+                end
+
+                local Tags = (Classes[Class] or {}).tags or {}
+                if find(Tags, "NotCreatable") then
+                    error(`Unable to create an Instance of type "{Class}"`)
+                end
+
+                local I = CreateInstance(Class, Var)
+                if Parent then I.Parent = Parent end
+                Metadata[I] = { was_created = true };
+
+                return I
+            end,
+            fromExisting = Spy("Instance.fromExisting")
+        }
+
+        Variables[InstanceLib] = "Instance"
+        SetInternal("Instance", InstanceLib)
+        BaseEnv.Instance = InstanceLib
+
+        local Libraries = {
+            "Vector2", "Vector3", "UDim", "UDim2", "Axes", "BrickColor", "CFrame", "Color3", "ColorSequence", "ColorSequenceKeypoint", "Faces", "NumberRange",
+            "NumberSequence", "NumberSequenceKeypoint", "Ray", "Rect", "Region3", "Region3int16", "Vector2int16", "Vector3int16"
+        }
+
+        local LibrariesTable = {}
+        for _, Lib in next, Libraries do
+            LibrariesTable[Lib] = roblox[Lib]
+        end
+
+        for LibName, Lib in next, LibrariesTable do
+            BaseEnv[LibName] = GetMetatable(LibName, {
+                __index = function(_, Key)
+                    local Idx = Index(Key, LibName)
+                    local Var = DefineVar(Idx)
+
+                    if LibName == "Color3" and Key == "toHSV" then
+                        return CreateFunction(function(...)
+                            local Vars = {GetVar(), GetVar(), GetVar()}
+                            DefineVars(Vars, `{Var}({BeautifyTuple(...)})`)
+                            return Spy(Vars[1]), Spy(Vars[2]), Spy(Vars[3])
+                        end, Idx)
+                    end
+
+                    local Int = Lib[Key]
+
+                    if Int == nil then
+                        return Spy(Var); -- this might be stupid
+                    end
+
+                    if typeof(Int) ~= "function" then
+                        --return Spy(Var)
+                        if Int then
+                            return FallbackValue(Var, Int, { is_lune = true })
+                        end
+
+                        SetInternal(Var, nil)
+                        return Spy(Var)
+                    end
+
+                    local function Scan(tbl)
+                        if typeof(tbl) ~= "table" then return tbl end
+
+	                    for i, v in next, tbl do
+		                    local Var, Int = Variables[v], Internal[v]
+		                    if Var and Int then
+			                    tbl[i] = Int[1]
+		                    elseif typeof(v) == "table" and not Var then
+			                    tbl[i] = Scan(v) -- recurse and replace the nested table
+		                    end
+	                    end
+	                    return tbl
+                    end
+
+                    return CreateFunction(function(...)
+                        local Args = pack(...)
+                        local SpyAll;
+
+                        local IsColor3 = LibName == "Color3" and Key == "fromRGB"
+
+                        for i = 1, Args.n do
+                            local v = Args[i]
+                            local Var = Variables[v]
+                            
+                            if IsColor3 and typeof(v) == "number" and v > 255 then
+                                SpyAll = true
+                                break
+                            end
+
+                            if not Var then continue end
+
+                            local Value = GetInternalValue(v)
+
+                            if Value and not Variables[Value] then
+                                Args[i] = Value
+                            else
+                                SpyAll = true
+                                break;
+                            end
+                        end
+
+                        local Var2 = DefineVar(`{Var}({BeautifyTuple(unpack(Args))})`)
+
+                        PotentialTypes[Var2] = LibName;
+
+                        if SpyAll then return Spy(Var2) end
+
+                        Metadata[Var2] = {custom_var=true}
+
+                        local Success, Data = pcall(function()
+                            return Int(unpack(Args))
+                        end)
+
+                        if not Success then
+                            if IsInPcall then return error(Data) end
+
+                            Data = Spy(Var2)
+                        end
+
+                        Variables[Data] = Var2
+                        Metadata[Data] = { is_lune = true }
+                        return Data
+                    end, Var)
+                end
+            })
+        end
+
+        BaseEnv.CatalogSearchParams = Spy("CatalogSearchParams")
+        BaseEnv.FloatCurveKey = Spy("FloatCurveKey")
+
+        BaseEnv.getcallingscript = function()
+            local Var = DefineVar(`getcallingscript()`)
+
+            CallingScript = CallingScript or CreateInstance("LocalScript", Var)
+            return FallbackValue(Var, CallingScript)
+        end
+
+        BaseEnv.getloadedmodules = function()
+            local Var = DefineVar(`getloadedmodules()`)
+
+            return FallbackValue(Var, LoadedModules)
+        end
+
+        BaseEnv.getrunningscripts = function()
+            local Var = DefineVar("getrunningscripts()")
+
+            return FallbackValue(Var, RunningScripts)
+        end
+
+        BaseEnv.getscripts = function()
+            local Var = DefineVar("getscripts()")
+            local Returned = {}
+            for i, Created in next, Cached do
+                if Created.ClassName == "LocalScript" or Created.ClassName == "ModuleScript" then
+                    insert(Returned, i)
+                end
+            end
+            return FallbackValue(Var, Returned);
+        end
+
+        RunningScripts[1] = BaseEnv.script;
+        insert(LoadedModules, CreateInstance("ModuleScript", "getloadedmodules()[1]"))
+    end
+
+    BaseEnv.getconnections = function(Event)
+        local Var = DefineVar(`getconnections({Beautify(Event)})`)
+        local List = Connections[Variables[Event]] or {}
+        for _, v in next, List do v.Var = Var end
+        
+        return FallbackValue(Var, List)
+    end
+
+    BaseEnv.hookfunction = function(original, hooked)
+        if not Settings.hookOp then
+            insert(top_level.messages, "hookfunction was used in this script, however hookOp is off, meaning hookfunction won't work properly.")
+        end
+        local Variable = Variables[original]
+
+        FuncHooks[original] = hooked
+
+        if Variable then
+            SetInternal(Variable, hooked)
+        end
+
+        local Name;
+        if not Variable then
+            Name = `hooked_{Id}{Suffix}`
+
+            local OriginalFunc = Beautify(original, nil, {funcName = Name})
+
+            Append("local " .. OriginalFunc)
+        else Name = Variable end
+
+        local Var = DefineVar()
+        Append(`{Var} = hookfunction({Name}, {Beautify(hooked)})`)
+
+        return CreateFunction(function(...) return original(...) end, Name)
+    end
+    
+    BaseEnv.isfunctionhooked = function(f)
+        local Var, Val = DefineVar(`isfunctionhooked({Beautify(f)})`), FuncHooks[f] ~= nil
+        Comment(tostring(Val))
+        return FallbackValue(Var, Val)
+    end
+    BaseEnv.restorefunction = function(f)
+        assert(FuncHooks[f], "function is not hooked!");
+        
+        Append(`restorefunction({Beautify(f)})`);
+
+        FuncHooks[f] = nil
+    end
+    BaseEnv.ishooked = BaseEnv.isfunctionhooked
+    BaseEnv.getnamecallmethod = function()
+        return FallbackValue(DefineVar("getnamecallmethod()"), IsInNameCall and NamecallMethod or nil)
+    end
+    BaseEnv.setnamecallmethod = function(...)
+        Append(`setnamecallmethod({BeautifyTuple(...)})`);
+
+        NamecallMethod = ...
+    end
+    BaseEnv.hookmetamethod = function(Object, Key, Callback) -- Add an error handler for missing args
+        local Var = DefineVar();
+        Append(`{Var} = hookmetamethod({BeautifyTuple(Object, Key, Callback)})`)
+
+        local Value = HookMetaMethods[Object] or {}
+        local Mt = getmetatable(Object) or MetaTables[Object]
+
+        if not Mt then error("Missing metatable for object!") end
+
+        local Old = Mt[Key]
+
+        Value[Key] = Callback
+        HookMetaMethods[Object] = Value
+
+        local NewFunction = function(_, ...)
+            local Values = pack(Callback(_, ...))
+            local Fallbacks = {}
+            local Needed = {}
+
+            for i = 1, Values.n do
+                local Var = GetVar()
+                insert(Needed, Var)
+                Fallbacks[i] = FallbackValue(Var, Values[i])
+            end
+
+            DefineVars(Needed, `{Var}({BeautifyTuple(...)})`)
+
+            Old(Needed, ...)
+
+            return unpack(Fallbacks)
+        end
+
+        Mt[Key] = NewFunction
+
+        return FallbackValue(Var, function(...)
+            local HowManyLinesStart = #Output
+
+            local Thing = `{Var}({BeautifyTuple(...)})`
+            Append(Thing)
+
+            local End = #Output
+
+            local Values = pack(Old(...))
+            Output = move(Output, 1, End, 1, {});
+
+            local Fallbacks, Vars = {}, {}
+
+            for i = 1, Values.n do
+                local Var = GetVar()
+                insert(Vars, Var)
+                insert(Fallbacks, FallbackValue(Var, Values[i]));
+            end
+
+            local LinesAffected = (End - HowManyLinesStart) -- How many lines it took to define the var
+            Output = move(Output, 1, #Output - LinesAffected, 1, {})
+            DefineVars(Vars, Thing)
+
+            return unpack(Fallbacks)
+        end);
+    end
+
+    BaseEnv.clonefunction = function(f)
+        local Var = DefineVar(`clonefunction({Beautify(f)})`)
+
+        local Function = CreateFunction(f, Var);
+        Functions[Function] = Variables[f] or debuginfo(f, "n");
+        
+        return Function;
+    end
+
+    BaseEnv.getfunctionhash = function(f) -- maybe make ts work
+        local Var = DefineVar(`getfunctionhash({Beautify(f)})`)
+
+        if CClosures[f] then error("invalid argument #1 to 'getfunctionhash', lua function expected") end
+        local Hash = Beautify(f)
+
+        return FallbackValue(Var, Hash);
+    end
+
+    BaseEnv.pcall = function(f, ...)
+        IsInPcall = true
+        PcallId += 1
+
+        local Var = Variables[f]
+
+        local Waiting = WaitingEnds
+        local Vars = { "success" .. PcallId, "errMsg" .. PcallId }
+        local Content = Var and `pcall({Var}, {BeautifyTuple(...)})` or "pcall(function(...) -- pcall id " .. PcallId
+        DefineVars(Vars, Content)
+
+        if not Var or true then AddNest() end
+
+        local Len = #Output
+
+        WaitingEnds = GetWaitingEnds()
+
+        local vals = pack(pcall(f, ...))
+        IsInPcall = false
+
+        CloseAllEnds()
+
+        WaitingEnds = Waiting
+
+        local success, err = vals[1], vals[2];
+        local DidError = not success and typeof(err) == "string"
+        if DidError then
+            vals[2] = HideErrors((err:gsub(":%d+:", ":1:")))
+        end
+
+        if #Output == Len or Output[Len + 1]:find("pcall(function(...)", 0, true) then -- if its a nested pcall or nothing changed
+            --> Nothing happened, remove the log.
+            AddNest(-1)
+            Output[#Output] = nil
+        else
+            if Var then Output[Len + 1] = nil end
+
+            if success then
+                Vars[2] = nil
+                if vals.n > 1 and not Var then
+                    Append(`return {BeautifyTuple(unpack(vals, 2))}`)
+                end
+            end
+
+            if vals.n ~= #Vars then
+                for i = #Vars + 1, vals.n do
+                    Vars[i] = "rv" .. (i - 1) .. "_" .. PcallId
+                end
+                Output[Len] = `{Tab}local {concat(Vars, ", ")} = {Content}`
+            end
+        
+            AddNest(-1)
+            if not Var then
+                Append("end)")
+            end
+
+            InlineComment(BeautifyButIgnoreFunctions(unpack(vals)))
+            PcallId += 1
+        end
+
+        return unpack(vals)
+    end
+
+    --> Drawing Library
+
+    do
+        local Properties = {
+            Line = {
+                From = "Vector2",
+                To = "Vector2",
+                Thickness = "number"
+            },
+            Text = {
+                Text = "string",
+                TextBounds = "Vector2",
+                Font = "any",
+                Size = "number",
+                Position = "Vector2",
+                Center = "boolean",
+                Outline = "boolean",
+                OutlineColor = "Color3"
+            },
+            Image = {
+                Data = "string",
+                Size = "Vector2",
+                Position = "Vector2",
+                Rounding = "number"
+            },
+            Circle = {
+                NumSides = "number",
+                Radius = "number",
+                Position = "Vector2",
+                Thickness = "number",
+                Filled = "boolean"
+            },
+            Square = {
+                Position = "Vector2", Size = "Vector2", Thickness = "number", Filled = "boolean"
+            },
+            Quad = {
+                PointA = "Vector2", PointB = "Vector2", PointC = "Vector2", PointD = "Vector2", Thickness = "number", Filled = "boolean"
+            },
+            Triangle = {
+                PointA = "Vector2", PointB = "Vector2", PointC = "Vector2", Thickness = "number", Filled = "boolean"
+            }
+        }
+
+        BaseEnv.Drawing = setmetatable({
+            Fonts = Spy("Drawing.Fonts"),
+            new = CreateFunction(function(Name)
+                Name = GetInternalValue(Name);
+
+                local Var = DefineVar(`Drawing.new({Beautify(Name)})`);
+                local pObject = Properties[Name];
+
+                if Variables[Name] then return Spy(Var) end;
+                if not pObject then return FallbackValue(Var, nil) end;
+
+                local Base, Self = {
+                    __OBJECT_EXISTS = true,
+                    Visible = false,
+                    ZIndex = 1,
+                    Transparency = 0,
+                    Color = roblox.Color3.new(1, 1, 1)
+                }, {};
+
+                local ReadOnly = { "TextBounds", "Destroy", "Remove" }
+                local Destroy = function() Base.__OBJECT_EXISTS = false end
+
+                Base.Destroy = CreateFunction(Destroy, Index("Destroy", Var))
+                Base.Remove = CreateFunction(Destroy, Index("Remove", Var))
+
+                for i, v in Base do
+                    Self[i] = v
+                    pObject[i] = Functions[v] and "function" or typeof(v);
+                end
+
+                local Meta = GetMetatable(Var, {
+                    __index = function(_, Key)
+                        local Indexed = DefineVar(Index(Key, Var));
+
+                        if not pObject[Key] then return nil end;
+
+                        PotentialTypes[Indexed] = pObject[Key];
+                        return FallbackValue(Indexed, Self[Key]);
+                    end,
+                    __newindex = function(_, Key, Value)
+                        local Indexed = Index(Key, Var)
+                        Define(Indexed, Beautify(Value), "__newindex");
+
+                        if not IsOfType(Value, pObject[Key], true) or find(ReadOnly, Key) then return end
+
+                        Self[Key] = Value;
+                    end
+                })
+                Drawings[Meta] = Self
+
+                return Meta
+            end, "Drawing.new")
+        }, {
+            __metatable = "This metatable is locked",
+            __newindex = error,
+            __tostring = function() return "Drawing" end
+        })
+
+        BaseEnv.isrenderobj = function(Value) return FallbackValue(DefineVar(`isrenderobj({Beautify(Value)})`), Drawings[Value] ~= nil) end
+        BaseEnv.getrenderproperty = function(Table, Key)
+            local Var = DefineVar(`getrenderproperty({BeautifyTuple(Table, Key)})`)
+            local Draw = Drawings[Table];
+            if not Draw then
+                return nil
+            end
+
+            return FallbackValue(Var, Draw[Key])
+        end
+        BaseEnv.setrenderproperty = function(Table, Key, Value)
+            DefineVar(`setrenderproperty({BeautifyTuple(Table, Key, Value)})`);
+
+            local Draw = Drawings[Table];
+            if not Draw then
+                return nil
+            end
+            Draw[Key] = Value;
+        end
+        BaseEnv.cleardrawcache = function()
+            Append("cleardrawcache()");
+
+            for _, v in Drawings do v.__OBJECT_EXISTS = false end
+        end
+    end
+
+    local function CryptoHelper(Path, Value)
+        BaseEnv[Path] = GetMetatable(Path, {
+            __index = function(_, Key)
+                local Var = DefineVar(Index(Key, Path))
+                local Value = Value[Key]
+
+                if typeof(Value) == "function" then
+                    local OldValue = Value;
+                    Value = CreateFunction(function(...)
+                        local Str = `{Var}({BeautifyTuple(...)})`
+
+                        for _, v in {...} do
+                            if Variables[v] and GetInternalValue(v) == v then
+                                return Spy(DefineVar(Str), "x", {
+                                    is_property = true
+                                }) -- So it can bypass val(...) == "wtf?" checks
+                            end
+                        end
+
+                        local Returned = pack(OldValue(...))
+                        local Vars = {}
+                        local Vals = {}
+
+                        for i = 1, Returned.n do
+                            local x = GetVar()
+
+                            insert(Vars, x)
+                            insert(Vals, FallbackValue(x, Returned[i]))
+                        end
+
+                        DefineVars(Vars, Str)
+                        return unpack(Vals)
+                    end, Var)
+                    return Value
+                end
+
+                if not Value then return Spy(Var) end
+
+                return FallbackValue(Var, Value) -- not sure when this would happen
+            end
+        })
+    end
+
+    CryptoHelper("base64", Crypto.base64)
+    CryptoHelper("crypto", Crypto)
+    CryptoHelper("crypt", Crypto)
+
+    BaseEnv.base64decode = Crypto.base64.decode
+    BaseEnv.base64encode = Crypto.base64.encode
+
+    BaseEnv.isexecutorclosure = function(f)
+        local v1 = DefineVar(`isexecutorclosure({Beautify(f)})`)
+        local Var, Value = Variables[f], true;
+        if Var and typeof(TrueEnv[Var]) == "function" then -- Stuff like print, warn, ...
+            Value = false
+        end
+        return FallbackValue(v1, Value); -- any function used in the script is an executor closure, however stuff like print aren't exec closures.
+    end
+    BaseEnv.isexecclosure = BaseEnv.isexecutorclosure
+    BaseEnv.queueonteleport = function(n)
+        n = GetInternalValue(n)
+
+        local tp = typeof(n)
+
+        Append(`queueonteleport({tp == "string" or Variables[n] and Beautify(n) or '\'invalid_type (not a string)\''})`)
+        if tp ~= "string" then
+            error(`invalid argument #1 to 'queueonteleport', string expected, got {tp}`)
+        end
+    end
+    BaseEnv.queue_on_teleport = BaseEnv.queueonteleport
+    BaseEnv.isreadonly = function(Object)
+        local Var = DefineVar(`isreadonly({Beautify(Object, nil, {ignore_funcs=true})})`)
+        local Value;
+        if not IsOfType(Object, "table", true) then
+            Value = false
+        else
+            Value = table.isfrozen(Object)
+        end;
+
+        return FallbackValue(Var, Value);
+    end
+    BaseEnv.isscriptable = function(Object, Property)
+        local Var, Value = DefineVar(`isscriptable({BeautifyTuple(Object, Property)})`);
+        if IsOfType(Property, "string", true) then
+            Value = find(HiddenProperties, Property) == nil;
+        else
+            Value = false;
+        end
+        return FallbackValue(Var, Value);
+    end
+
+    BaseEnv._VERSION = "Luau"
+    
+    --EnvValues.bit = {table.clone(bit32)}
+    --EnvValues.bit32 = EnvValues.bit
+    EnvValues.bit32 = { HookLib("bit32") }
+    EnvValues.bit = EnvValues.bit32
+    
+    BaseEnv.getgc = function(shouldIncludeTables)
+        local val = Gc
+        if not shouldIncludeTables then
+            for i, v in val do
+                if typeof(v) == "table" and not Functions[v] then
+                    val[i] = nil
+                end
+            end
+        end
+
+        return FallbackValue(DefineVar("getgc()"), val, { custom_var = true })
+    end
+    BaseEnv.gethwid = function()
+        local Var = DefineVar("gethwid()")
+
+        PotentialTypes[Var] = "string"
+
+        return FallbackValue(Var, HardwareId, {is_property = true})
+    end
+
+    local SafeEnv = { -- functions that are allowed by default
+        -- funcs
+        "newproxy", "rawset"
+    }
+
+    local Wrapped = { -- functions that check arguments before processing
+        "os" -- "coroutine",
+    }
+
+    local function EndsWith(str, ending)
+	    return sub(str, -#ending) == ending
+    end
+
+    BaseEnv.string = HookLib("string", {
+        gmatch = CreateFunction(function(s, p, ...)
+            print('gmatch',s,p,...)
+
+            s, p = GetInternalValue(s), GetInternalValue(p)
+
+            if typeof(s) ~= "string" then
+                local Tuple = BeautifyTupleOptions({ignore_funcs = true}, s, p, ...)
+
+                return Spy(DefineVar(`string.gmatch({Tuple})`))
+            end
+
+            return string.gmatch(s, p, ...)
+        end, "string.gmatch"),
+        find = CreateFunction(function(str, pat, ...)
+            print('find',BeautifyTuple(str, pat, ...))
+
+            str, pat = GetInternalValue(str), GetInternalValue(pat);
+
+            local Vars = {};
+            local Ehh = `string.find({BeautifyTuple(str, pat, ...)})`
+
+            if typeof(str) ~= "string" or (typeof(pat) ~= "string" and pat) then
+                local Var = GetVar()
+                Vars = { Var }
+
+                DefineVars(Vars, Ehh)
+                assert(Variables[str], `invalid argument #1 to 'match', string expected got {typeof(str)}`)
+
+                if typeof(str) == "string" then
+                    return FallbackValue(Var, string.find(str, pat, ...))
+                end
+
+                return Spy(Var)
+            end
+
+            local toReturn = pack(string.find(str, pat, ...))
+
+            return unpack(toReturn)
+        end, "string.find"),
+        match = CreateFunction(function(str, pat)
+            print('match',BeautifyTuple(str, pat))
+
+            str, pat = GetInternalValue(str), GetInternalValue(pat);
+
+            if Variables[str] or Variables[pat] then
+                local Var = DefineVar(`string.match({BeautifyTuple(str, pat)})`)
+
+                return Spy(Var);
+            end
+
+            --if pat == "%d+" and match(str, ":%d+:") then return "1" end
+
+            return match(str, pat)
+        end, "string.match"),
+        rep = CreateFunction(function(s, n)
+            print('rep',s,n)
+            local Var;
+            if (typeof(n) ~= "number" and n) or n > 1e6 then
+                Var = DefineVar(`string.rep({BeautifyTuple(s, n)})`)
+                return Spy(Var)
+            end
+
+            return rep(s, n);
+        end, "string.rep")
+    })
+
+    BaseString = BaseEnv.string;
+
+    BaseEnv.select = function(idx, ...)
+        if (idx == "#") then return select(idx, ...) end
+        local args = {...}
+
+        for i, v in next, args do
+            local val = GetInternalValue(v);
+            if val ~= v then args[i] = val end
+
+            if Variables[val] then
+                return FallbackValue(DefineVar(`select({BeautifyTuple(idx, ...)})`), select(idx, ...))
+            end
+        end
+
+        if Variables[idx] then return Spy(DefineVar(`select({BeautifyTuple(idx, ...)})`)) end
+        
+        return select(idx, ...)
+    end
+    BaseEnv.unpack = function(tbl, ...)
+        local i, j = ...
+        i, j = GetInternalValue(i), GetInternalValue(j)
+
+        if (Variables[tbl] and not Tables[tbl] and not ParamVars[tbl]) or (Variables[i] or Variables[j]) then
+            return Spy(DefineVar(`unpack({BeautifyTuple(tbl, i, j)})`))
+        elseif Tables[tbl] and false then
+            local old = tbl;
+
+            tbl = GetInternalValue(tbl)
+            
+            local Vars = {}
+            local Values = {}
+            local len = #tbl
+            local ShouldFallback = len <= 10
+
+            for i = 1, len do
+                local Var = GetVar()
+                Vars[i] = Var
+                insert(Values, ShouldFallback and FallbackValue(Var, tbl[i]) or tbl[i])
+            end
+
+            DefineVars(Vars, `unpack({BeautifyTuple(old, ...)})`)
+            return unpack(Values)
+        end
+
+        --if typeof(tbl) == "number" or not tbl then return end -- Prometheus
+        --if typeof(tbl) == "string" then return Spy(tbl) end
+        --if typeof(tbl) ~= "table" then return tbl end -- Prometheus
+        if ParamVars[tbl] then return end -- Prometheus
+
+        return unpack(tbl, i, j)
+    end
+
+    BaseEnv.getscriptbytecode = CreateFunction(function(scr)
+        local Var = DefineVar(`getscriptbytecode({Beautify(scr)})`)
+        assert(PotentialTypes[scr] == "Instance" or Cached[scr] or IsInPcall, `invalid argument #1 to 'getscriptbytecode', Instance expected got {typeof(scr)}`) -- if false, it'll error
+
+        local Spied = Spy(Var)
+
+        PotentialTypes[Var] = "string"
+        Metadata[Spied] = { error_on_load = "Luau bytecode is not loadable." }
+        return Spied
+    end)
+    BaseEnv.error = function(msg, lvl)
+        if not IsInPcall and lvl ~= 0 then
+            Append(`error({BeautifyTuple(msg, lvl)})`)
+            InlineComment("used by the script itself")
+        end
+
+        DidCallError = true
+
+        error(msg, lvl)
+    end
+    BaseEnv.rawget = function(tbl, key)
+        if Variables[tbl] then
+            local Var = DefineVar(`rawget({BeautifyTuple(tbl, key)})`)
+            return FallbackValue(Var, tbl[key])
+        end
+        
+        return rawget(tbl, key)
+    end
+    BaseEnv.rawequal = Eq("==");
+
+    local WrappedYield = SafeWrap(coroutine.yield, "coroutine.yield")
+
+    BaseEnv.coroutine = HookLib("coroutine", {
+        create = function(a) return coroutine.create(a) end,
+        yield = function(...)
+            if not Luraph then Luraph = true Strings = {}; end
+            return WrappedYield(...)
+        end
+    })
+
+    local random = math.random
+
+    local HookedLibs = {
+        math = {
+            huge = math.huge,
+            pi = math.pi,
+            random = function(a, b)
+                if Variables[a] or Variables[b] then
+                    local Thing = DefineVar(`math.random({BeautifyTuple(a, b)})`);
+
+                    return Spy(Thing);
+                end
+                return random(a, b);
+            end
+        },
+        table = {
+            unpack = table.unpack,
+            pack = table.pack
+        },
+        utf8 = {},
+        buffer = {}
+    }
+
+    local function CreateEnum(Name, e)
+        local function CreateEnumKey(Key2)
+            local Path = `Enum.{Name}.{Key2}`
+            local mt = setmetatable({ Name = Key2 }, {
+                __tostring = function() return Path end,
+                __metatable = "This metatable is locked.",
+                __index = function(_, Key3)
+                    local Var = GetVar()
+
+                    Append(`local {Var} = {Index(Key3, Path)}`)
+                    return Spy(Var)
+                end
+            })
+
+            Variables[mt] = Path
+            PotentialTypes[Path] = "EnumItem"
+
+            return mt
+        end
+
+        local mt = setmetatable({
+            Name = Name,
+            GetEnumItems = function()
+                local Out = {}
+
+                for _, Key in next, e do
+                    insert(Out, CreateEnumKey(Key))
+                end
+
+                return Out
+            end
+        }, {
+            __tostring = function() return Name end,
+            __metatable = "This metatable is locked.",
+            __index = function(_, Key2)
+                DefineVar(Index(Key2, "Enum." .. Name))
+
+                if not find(e, Key2) then return nil end
+                
+                return CreateEnumKey(Key2)
+            end
+        })
+
+        local Var = `Enum.{Name}`
+        
+        Variables[mt] = Var
+        PotentialTypes[Var] = "Enum"
+
+        return mt
+    end
+
+    local Enum = setmetatable({
+        GetEnums = function()
+            local Out = {}
+
+            for Key, List in next, EnumLibrary do
+                insert(Out, CreateEnum(Key, List))
+            end
+
+            return Out
+        end
+    }, {
+        __index = function(_, Key)
+            local e = EnumLibrary[Key]
+            DefineVar(Index(Key, "Enum"))
+            if not e then return error(`{Key} is not a valid member of "Enum"`) end
+
+            return CreateEnum(Key, e)
+        end,
+        __tostring = function() return "Enums" end
+    })
+
+    Variables[Enum] = "Enum"
+    PotentialTypes["Enum"] = "Enums"
+
+    BaseEnv.Enum = Enum
+
+    for _, v in next, SafeEnv do
+        BaseEnv[v] = TrueEnv[v]
+    end
+
+    for _, v in next, Wrapped do
+        local Value = TrueEnv[v]
+
+        if typeof(Value) == "table" then
+            BaseEnv[v] = HookLib(v)
+        else
+            BaseEnv[v] = SafeWrap(Value, v)
+        end
+    end
+
+    for LibName, Lib in next, HookedLibs do
+        BaseEnv[LibName] = HookLib(LibName, Lib)
+    end
+
+    -- File System (Session Only)
+    local files = {}
+    local FileFuncs = {}
+
+    local function startswith(a, b) return sub(a, 1, #b) == b end
+    local function endswith(hello, lo) return sub(hello, #hello - #lo + 1, #hello) == lo end
+
+    FileFuncs.writefile = function(path, content)
+        local Path = split(path, '/')
+        local CurrentPath = {}
+
+        for i = 1, #Path do
+            local a = Path[i]
+            CurrentPath[i] = a
+            if not files[a] and i ~= #Path then
+                files[concat(CurrentPath, '/')] = {}
+                files[concat(CurrentPath, '/') .. '/'] = files[concat(CurrentPath, '/')]
+            elseif i == #Path then
+                files[concat(CurrentPath, '/')] = tostring(content)
+            end
+        end
+    end
+    FileFuncs.makefolder = function(path)
+        files[path] = {}
+        files[path .. '/'] = files[path]
+    end
+    FileFuncs.isfolder = function(path) return type(files[path]) == 'table' end
+    FileFuncs.isfile = function(path) return type(files[path]) == 'string' end
+    FileFuncs.readfile = function(path) return files[path] end
+    FileFuncs.appendfile = function(path, text2)
+        FileFuncs.writefile(path, FileFuncs.readfile(path) .. text2)
+    end
+    FileFuncs.loadfile = function(path, var)
+        if not FileFuncs.isfile(path) then error('File \'' .. tostring(path) .. '\' does not exist.', 2) return '' end
+
+        local content = FileFuncs.readfile(path)
+
+        local s, func = pcall(function()
+            return loadstring(content)
+        end)
+
+        if not s then
+            return nil, tostring(func):match("[^\n]+")
+        end
+
+        return CreateFunction(function(...)
+            Append(`{var}({BeautifyTuple(...)})`);
+
+            return setfenv(func, Env)(...)
+        end, var), s
+    end
+    FileFuncs.delfolder = function(path)
+        local f = files[path]
+        if type(f) == 'table' then files[path] = nil end
+    end
+    FileFuncs.delfile = function(path)
+        local f = files[path]
+        if type(f) == 'string' then files[path] = nil end
+    end
+    FileFuncs.listfiles = function(path)
+        if not path or path == '' then
+            local Files = {}
+            for i, v in pairs(files) do
+                if #i:split('/') == 1 then insert(Files, i) end
+            end
+            return Files
+        end
+        if type(files[path]) ~= 'table' then return error(path .. ' is not a folder.') end
+        local Files = {}
+        for i in pairs(files) do
+            if startswith(i, path .. '/') and not endswith(i, '/') and i ~= path and #i:split('/') == (#path:split('/') + 1) then insert(Files, i) end
+        end
+        return Files
+    end
+
+    for FuncName, Func in next, FileFuncs do
+        BaseEnv[FuncName] = CreateFunction(function(...)
+            local Var = GetVar()
+            local Args = {...}
+            if FuncName == "loadfile" then insert(Args, Var) end
+
+            local Returned = pack(pcall(Func, unpack(Args)));
+            local Success = Returned[1];
+
+            Define(Var, `{FuncName}({BeautifyTuple(...)})`)
+
+            PotentialTypes[Var] = find({"isfile", "isfolder"}, FuncName) and "boolean" or "string"
+
+            if not Success then
+                Comment("file system error here")
+            end
+
+            local Value = Returned[2]
+            if Returned.n == 1 then
+                return FallbackValue(Var, Value)
+            end
+
+            return unpack(Returned, 2);
+        end, FuncName)
+    end
+
+    local function GetExecutorFunction(f)
+        return CreateFunction(function()
+            if Settings.hookOp then
+                local v1, v2 = GetVar(), GetVar()
+
+                DefineVars({v1, v2}, `{f}()`)
+
+                SetInternal(v1, "Delta")
+                SetInternal(v2, "3.0.0")
+
+                return Spy(v1), Spy(v2);
+            end
+
+            Append(f .. "()")
+            return "Delta", "3.0.0"
+        end, f)
+    end
+
+    BaseEnv.getexecutorname = GetExecutorFunction("getexecutorname")
+    BaseEnv.identifyexecutor = GetExecutorFunction("identifyexecutor")
+
+    local TickCalls = 0;
+
+    local function tick(): number
+        TickCalls += 1
+
+	    return os.clock() + (os.time() - os.time(os.date("*t", os.clock()))) + TickCalls / 10
+    end
+
+    BaseEnv.os = HookLib("os", {
+        time = function(...)
+            local Time = os.time() + TimeOffset
+
+            local Var = GetVar()
+            Define(Var, `os.time({select('#', ...) > 0 and BeautifyTuple(...) or ''})`)
+
+            if Settings.hookOp then
+                SetInternal(Var, Time)
+                PotentialTypes[Var] = "number"
+
+                return Spy(Var)
+            end
+
+            return Time
+        end,
+        clock = function(...)
+            local Time = os.clock() + TimeOffset
+
+            local Var = GetVar()
+            Define(Var, `os.clock({select('#', ...) > 0 and BeautifyTuple(...) or ''})`)
+
+            if Settings.hookOp then
+                SetInternal(Var, Time)
+                PotentialTypes[Var] = "number"
+
+                return Spy(Var)
+            end
+
+            return Time
+        end
+    })
+
+    BaseEnv.tick = function() -- we spoof tick 🤫
+        local Var = GetVar()
+        Define(Var, "tick()", "__call")
+
+        local Value = tick()
+
+        if Settings.hookOp then
+            SetInternal(Var, Value)
+
+            return Spy(Var)
+        end
+        return Value
+    end
+
+    BaseEnv.wait = function(x) --! maybe change later
+        local Var = DefineVar(`wait({x and Beautify(x) or ""})`)
+
+        return FallbackValue(Var, Wait(x))
+    end
+
+    local GlobalStringMt = { __index = BaseEnv.string }
+
+    GlobalEnv = GlobalEnv or Require("./env/Env.lua"){
+        Variables = Variables,
+        Internal = Internal,
+        Spy = Spy,
+        Append = Append,
+        GetVar = GetVar,
+        Output = Output,
+        DefineVars = DefineVars,
+        AddNest = AddNest,
+        SetNest = SetNest,
+        GetNest = GetNest,
+        Beautify = Beautify,
+        BeautifyTuple = BeautifyTuple,
+        InlineComment = InlineComment,
+        FallbackValue = FallbackValue,
+        GetWaitingEnds = GetWaitingEnds,
+        WaitingEnds = WaitingEnds,
+        CloseAllEnds = CloseAllEnds
+    }
+
+    BaseEnv.getmetatable = function(tbl)
+        local Var = Variables[tbl]
+        if Var then
+            local ReallyExists = rawget(BaseEnv, Var)
+            local String = "The metatable is locked";
+
+            if ReallyExists then
+                return FallbackValue(DefineVar(`getmetatable({Var})`), String)
+            end
+
+            return String;
+        end
+
+        local tp = typeof(tbl)
+
+        if tp == "string" then
+            local v = DefineVar(`getmetatable({Beautify(tbl)})`)
+            return FallbackValue(v, GlobalStringMt, { custom_var = true })
+        end
+
+        if tp ~= "table" and tp ~= "userdata" then error("invalid argument #1 to 'getmetatable', 'table' or 'userdata' expected got '" .. tp .. '') end
+
+        local x = getmetatable(tbl)
+        local mt = MetaTables[tbl] or x
+
+        if mt and mt.__metatable then return mt.__metatable end
+        return mt
+    end
+
+    BaseEnv.setmetatable = function(...)
+        local vals = pack(...)
+        local tbl, mt = vals[1], vals[2]
+
+        local Path = Variables[tbl]
+        local mt2 = getmetatable(tbl)
+
+        if not tbl then
+            error("missing argument #1 to 'setmetatable' (table expected)")
+        elseif vals.n == 1 then
+            error("missing argument #2 to 'setmetatable' (nil or table expected)")
+        end
+
+        local md = Metadata[tbl]
+        if md and md.metamethods_change then
+            local Var = DefineVar(`setmetatable({Beautify(tbl)}, {Beautify(mt)})`)
+
+            for i, v in next, mt do
+                local old = mt2[i];
+                if typeof(v) == "function" then
+                    v = setfenv(v, Env); -- prevent debug.info stuff?
+
+                    mt2[i] = function(...)
+                        local values = pack(pcall(v, ...))
+                        if not values[1] then
+                            Comment(`{Index(i, Var)} errored here with message {values[2]}`)
+                        end
+                        return old(...)
+                    end
+                end
+            end
+
+            return FallbackValue(Var, mt2)
+        end
+
+        if not Tables[tbl] and Path or (mt2 and typeof(mt2) ~= "table") then
+            if Path then
+                Append(`setmetatable({Beautify(tbl)}, {Beautify(mt)})`)
+            end
+
+            error("attempt to modify a readonly table")
+        end
+
+        MetaTables[tbl] = mt
+
+        if mt and mt.__metatable then
+            local t2 = table.clone(mt)
+            t2.__metatable = nil
+            
+            return setmetatable(tbl, t2)
+        end
+
+        return setmetatable(tbl, mt)
+    end
+
+    local ValidDebug = {
+        --"getconstant", "getconstants", "setconstant", "getupvalue", "getupvalues", "setupvalue", "getproto", "getprotos", "setproto",
+        --"getstack", "setstack", "getregistry", "getlocal", "getlocals", "setlocal"
+        "info"
+    }
+
+    local function getmt(p)
+        return CreateFunction(function(t)
+            -- Should be:
+            -- getrawmetatable(game) -> The spied game mt
+            -- getrawmetatable(x) -> {}, because none exists.
+
+            local Var = Variables[t]
+            local MT = MetaTables[t] -- The metatable set by the script (setmetatable())
+
+            local Beautified = "{" .. Beautify(t) .. "}"
+            local BeautifiedMT = MT and Beautify(MT, nil, { ignore_funcs = true }) or "nil"
+
+            local thing = Var or `setmetatable({Beautified}, {BeautifiedMT})`
+            local N = DefineVar(`{p}({thing})`)
+
+            if typeof(t) == "string" then return FallbackValue(N, GlobalStringMt, { custom_var = true }) end
+
+            if Var then
+                if MT then return FallbackValue(N, MT) end
+                
+                local ReallyExists = rawget(BaseEnv, Var)
+
+                --[[if ReallyExists then
+                    local mt = getmetatable(ReallyExists)
+                    mt.__metatable = "This metatable is locked."
+
+                    return GetMetatable(N, {
+                        __index = function(_, Key)
+                            local V = DefineVar(Index(Key, N))
+
+                            return FallbackValue(V, mt[Key])
+                        end
+                    })
+                end
+
+                return FallbackValue(N, {})]]
+                if ReallyExists then
+                    assert(typeof(ReallyExists) == "table", `invalid argument #1 to '{p}', table expected got '{typeof(ReallyExists)}'`)
+
+                    return getmetatable(ReallyExists)
+                end
+            end
+
+            if typeof(t) ~= "table" then error(`invalid argument #1 to '{p}', table expected got '{typeof(t)}'`) end
+
+            return FallbackValue(N, MT)
+        end, p)
+    end
+
+    local function setmt(p)
+        return CreateFunction(function(t, mt)
+            local mtrms = DefineVar(`{p}({BeautifyTuple(t, mt)})`)
+
+            local t1, t2 = typeof(t), typeof(mt)
+
+            if t1 == "string" then
+                GlobalStringMt = mt;
+                return FallbackValue(mtrms, setmetatable({}, GlobalStringMt), { custom_var = true })
+            end
+
+            assert(t1 == "table", "invalid argument #1 to 'setrawmetatable', table expected got '" .. t1 .. "'")
+            assert(t2 == "table", "invalid argument #2 to 'setrawmetatable', table expected got '" .. t2 .. "'")
+
+            return FallbackValue(mtrms, setmetatable(t, mt))
+        end, p)
+    end
+
+    local Infos = {}
+
+    local DebugTbl = {
+        getinfo = CreateFunction(function(t, i)
+            local Var = DefineVar(`debug.getinfo({Beautify(t)})`)
+            if Infos[t] then return Infos[t] end
+
+            t = GetInternalValue(t);
+
+            local Self = Variables[t]
+            if Self then
+                Self = split(Self, ".")
+                Self = Self[#Self]
+            end
+
+            if Functions[t] then
+                local Returned = {}
+
+                for _, v in next, split(i or "slnaf", "") do
+                    v = lower(v)
+
+                    if v == "s" then
+                        Returned.what = "C"
+                    elseif v == "n" then
+                        Returned.name = Self or ''
+                    elseif v == "a" then
+                        Returned.numparams, Returned.is_vararg = 0, 1
+                    elseif v == "f" then
+                        Returned.f = t
+                    elseif v == "l" then
+                        Returned.line = 1
+                    end
+                end
+
+                return FallbackValue(Var, Returned, { custom_var = true })
+            end
+
+            if Self then
+                return Spy(Var)
+            end
+
+            local numparams, isvrg = debuginfo(t, 'a')
+
+            local Value = {
+                line = 1,
+                currentline = 1,
+                linedefined = 1,
+                func = CreateFunction(t, `{Var}.func`),
+                numparams = numparams,
+                is_vararg = isvrg and 1 or 0,
+                what = debuginfo(t, 's') == '[C]' and 'C' or 'Lua',
+                source = TraceId,
+                short_src = TraceId:sub(1, -2),
+                nups = 0,
+                name = debuginfo(t, "n")
+            }
+
+            local Val = FallbackValue(Var, Value, { custom_var = true })
+            Infos[t] = Val
+
+            return Val
+        end, "debug.getinfo"),
+        setmetatable = setmt("debug.setmetatable"),
+        traceback = CreateFunction(function(a)
+            print("traceback",a)
+            assert(not a or typeof(a) == "string", "invalid argument #1 to 'traceback' (string expected got " .. typeof(a) .. ")")
+
+            local trace = debug.traceback(a)
+            local lines = split(trace, "\n")
+            local out = {}
+
+            for _, v in next, lines do
+                --v = gsub(v, ":%d+:", ":1:")
+                if not match(v, "%[string \".*main\"%]") then
+                    v = gsub(v, "string \"luau%.load%(.-%)\"", TraceId)
+                    insert(out, v)
+                end
+            end --> covering my traces:)
+
+            local value = concat(out, "\n")
+            value = gsub(value, ":%d+:", ":1:")
+
+            return value
+        end, "debug.traceback"),
+        info = CreateFunction(function(t, i)
+            local StrValue = `debug.info({Beautify(t, Nest, {ignore_funcs=true})}, {Beautify(i)})`
+
+            t = GetInternalValue(t)
+
+            local Self = Variables[t]
+            if Self then
+                Self = split(Self, ".")
+                Self = Self[#Self]
+            end
+            
+            local f = Functions[t]
+            if typeof(f) == 'string' then Self = f end
+
+            if Functions[t] then --! info here is safe.
+                local Returned = {}
+
+                for _, v in next, split(i, "") do
+                    v = lower(v)
+
+                    if v == "s" then
+                        insert(Returned, "[C]")
+                    elseif v == "n" then
+                        insert(Returned, Self or '')
+                    elseif v == "a" then
+                        insert(Returned, 0)
+                        insert(Returned, true)
+                    elseif v == "f" then
+                        insert(Returned, t)
+                    elseif v == "l" then
+                        insert(Returned, TrueEnv[Self] and -1 or 1)
+                    end
+                end
+
+                local Vars = {}
+                local ToReturn = {}
+
+                for i = 1, #Returned do
+                    local Var = GetVar()
+                    insert(Vars, Var)
+                    insert(ToReturn, FallbackValue(Var, Returned[i]))
+                end
+
+                DefineVars(Vars, StrValue)
+
+                return unpack(ToReturn)
+            end
+
+            if Self then
+                return Spy(DefineVar(StrValue))
+            end
+
+            local Values;
+            if typeof(t) == "number" then
+                local Stack = CallStack[t]
+                if Stack then
+                    Values = pack(debuginfo(Stack, i))
+                elseif t + 1 <= Nest then
+                    Values = pack(debuginfo(typeof(t) == "number" and t + (Settings.hookOp and 5 or 2) or t, i))
+                    local idx = string.find(i:lower(), "l")
+                    Values[idx] = 1;
+                end
+            end
+
+            if not Values then Values = {n=1} end
+
+            local Vars = {}
+            local ToReturn = {}
+
+            for i = 1, max(Values.n, 1) do -- so there's at least 1
+                local Var = GetVar()
+                local Val = Values[i];
+                if typeof(Val) == "function" then
+                    Val = CreateFunction(Val, Var)
+                end
+
+                insert(Vars, Var)
+                insert(ToReturn, FallbackValue(Var, Val))
+            end
+
+            DefineVars(Vars, StrValue)
+            InlineComment(BeautifyTuple(unpack(Values)))
+
+            return unpack(ToReturn)
+        end, "debug.info"),
+        getmetatable = getmt("debug.getmetatable"),
+        getrawmetatable = getmt("debug.getrawmetatable"),
+        dumpcodesize = Spy("debug.dumpcodesize"),
+        getmemorycategory = CreateFunction(function()
+            return MemoryCategory
+        end, "debug.getmemorycategory"),
+        setmemorycategory = CreateFunction(function(tag)
+            MemoryCategory = tag
+        end, "debug.setmemorycategory"),
+        resetmemorycategory = CreateFunction(function()
+            MemoryCategory = TraceId
+        end, "debug.resetmemorycategory")
+    }
+
+    for _, i in next, {"getupvalue", "getupvalues", "getproto", "getprotos", "getstack", "setstack", "getlocal", "getlocals", "setlocal", "setupvalue", "getregistry"} do
+        local Path = Index(i, "debug")
+        local Func = CreateFunction(function(...)
+            return Spy(DefineVar(`{Path}({BeautifyTuple(...)})`), nil, { is_property = true })
+        end, Path)
+        DebugTbl[i] = Func
+    end
+
+    BaseEnv.debug = setmetatable(DebugTbl, GetMetatable("debug", {
+        __index = function(_, Key)
+            local Var = GetVar()
+            Define(Var, `{Index(Key, "debug")}`)
+            Key = GetInternalValue(Key);
+
+            if find(ValidDebug, Key) then
+                return CreateFunction(function(...)
+                    Append(`{Var}({BeautifyTuple(...)})`)
+
+                    return nil -- nil
+                end, Var)
+            end
+
+            return nil
+        end
+    }))
+    Variables[BaseEnv.debug] = "debug"
+
+    BaseEnv.getrawmetatable = getmt("getrawmetatable")
+    BaseEnv.setrawmetatable = setmt("setrawmetatable")
+
+    local Macros = {}
+
+    Macros.hookexpr = function(id, val)
+        Hooks[id] = val
+    end
+
+    Macros.predefine = function(values)
+        assert(typeof(values) == "table", "invalid argument #1 to 'predefine', table expected")
+
+        for i, v in next, values do Predefined[i] = {v} end
+
+        Append(`predefine({Beautify(values)})`)
+    end
+
+    Macros.setvarname = function(name)
+        assert(typeof(name) == "string", "invalid argument #1 to 'setvarname', string expected got " .. typeof(name))
+
+        VarName = name
+    end
+
+    Macros.hookallcalls = function(handler)
+        assert(not CallHandler, "A call handler already exists.")
+
+        Comment(`hookallcalls(handler: {typeof(handler)})`)
+
+        CallHandler = handler
+    end
+
+    Macros.hookallnamecalls = function(handler)
+        assert(not CallHandler, "A namecallcall handler already exists.")
+
+        Comment(`hookallnamecalls(handler: {typeof(handler)})`)
+
+        NamecallHandler = handler
+    end
+
+    Macros.preventerror = function(msg)
+        assert(typeof(msg) == "number", "invalid argument #1 to 'preventerror', number expected got " .. typeof(msg))
+
+        Append(`preventerror({Beautify(msg)})`)
+        IgnoredErrors[msg] = true
+    end
+
+    Macros.forceerror = function(id, msg)
+        assert(typeof(id) == "number", "invalid argument #1 to 'forceerror', number expected.")
+        assert(typeof(msg) == "string", "invalid argument #2 to 'forceerror', string expected.")
+
+        ForcedErrors[id] = msg
+    end
+
+    BaseEnv.tostring = function(Str)
+        local Path = Variables[Str]
+
+        if not Path then return tostring(Str) end
+
+        if Functions[Str] then
+            local addr = GetAddress(Path or tostring(random(1, 1e6)), "function")
+            local Var = DefineVar(`tostring({Beautify(Str)})`)
+
+            return FallbackValue(Var, addr)
+        end
+
+        if PotentialTypes[Path] == "EnumItem" then return FallbackValue(DefineVar(`tostring({Path})`), Path) end
+
+        local Type = PotentialTypes[Path] or GetType(Path)
+
+        local addr = (Type == "function" or Type == "table" and GetAddress(Path or tostring(random(1, 1e6)), Type)) or tostring(GetInternalValue(Str));
+        local Var = DefineVar(`tostring({Str})`)
+
+        local mt = getmetatable(Str)
+        if mt and mt.__eq then
+            local mt = GetMetatable(Var, {
+                __eq = mt.__eq
+            })
+            Metadata[mt] = Metadata[Str] or {}
+            Metadata[mt].is_tostring = true;
+
+            return mt
+        end
+
+        return FallbackValue(Var, addr, Metadata[Str])
+    end
+    BaseEnv.tonumber = function(n, base)
+        local Var = Variables[n]
+        if Var then
+            local v = DefineVar(`tonumber({BeautifyTuple(n, base)})`)
+
+            local val = GetInternalValue(n)
+            local value = typeof(val) == "string" and tonumber(val, base) or nil
+
+            if value then
+                Comment(value)
+            else
+                Comment("no value")
+                if Settings.hookOp then
+                    return Spy(v, nil, { force_true = true })
+                end
+                return 1;
+            end
+
+            return FallbackValue(v, value, { force_true = true })
+        end
+
+        return tonumber(n, base)
+    end
+
+    local CustomEnvs = {}
+    local CustomPrefix;
+
+    local function createEnv(path)
+        CustomEnvs[path] = CustomEnvs[path] or {}
+
+        local Self = CustomEnvs[path]
+
+        local meta;
+        meta = GetMetatable(path, {
+            __index = function(_, GKey)
+                OpCountCheck();
+
+                local Var = DefineVar(Index(GKey, path))
+
+                local Value = Self[GKey]
+                local Value2 = rawget(BaseEnv, GKey)
+
+                if Value then return Value[1] end
+                if Value2 then return Value2 end
+
+                CustomPrefix = path
+
+                return FallbackValue(Var, Self[GKey])
+            end,
+            __newindex = function(_, Key, Value)
+                if Key == "25ms was here :)" then return end
+
+                local Indexed = Index(Key, path)
+
+                Self[Key] = {Value}
+                EnvValues[Key] = {Value}
+
+                Append(`{Indexed} = {Beautify(Value)}`)
+            end
+        })
+
+        MetaTables[meta] = Env
+        Variables[meta] = path
+        Metadata[meta] = {
+            metamethods_change = true
+        }
+
+        return meta
+    end
+
+    local genv, _g, _shared = createEnv("getgenv()"), createEnv("_G"), createEnv("shared")
+
+    local TaskCalls = 0
+    local TaskHook = {
+        synchronize = Spy("task.synchronize"),
+        desynchronize = Spy("task.desynchronize")
+    }
+
+    Task = setmetatable({}, {
+	    __index = function(_, Key)
+		    local Actual = task[Key] or TaskHook[Key]
+		    if not Actual then DefineVar(Index(Key, "task")) return end
+
+		    local Indexed = Index(Key, "task")
+
+		    return TaskHook[Key] or CreateFunction(function(...)
+			    TaskCalls += 1
+
+			    local Args = table.pack(...)
+			    local DontRun
+			    local ShouldError
+
+			    for i = 1, Args.n do
+				    local Arg = Args[i]
+                    local IsVar = Variables[Arg]
+
+				    if IsVar and not Functions[Arg] then
+                        DontRun = true
+					    break
+				    end
+
+				    if typeof(Arg) == "table" and not IsVar then
+					    ShouldError = ShouldError or `invalid argument #{i} to '{Key}' (function or thread expected)`
+				    end
+			    end
+
+			    OpCountCheck()
+
+                if ShouldError then
+                    Append(`{Indexed}({BeautifyTuple(unpack(Args))}) -- {ShouldError}`)
+                    error(ShouldError)
+                end
+
+			    if DontRun then
+    				return Spy(DefineVar(`{Indexed}({BeautifyTuple(unpack(Args))})`))
+	    		end
+
+		    	if Indexed == "task.wait" then
+			    	Wait(Args[1])
+                    local Var = DefineVar(`task.wait({BeautifyTuple(unpack(Args))})`)
+                    return Spy(Var)
+			    end
+
+                if not Settings.hookOp then
+                    if Indexed == "task.defer" then
+                        Append(`task.defer({Beautify(Args[1], nil, { wait_till_end = true })}, {BeautifyTuple(unpack(Args, 2))}})`)
+                    else
+                        Append(`{Indexed}({BeautifyTuple(unpack(Args))})`);
+                    end
+
+                    return;
+                end
+
+                if Indexed == "task.spawn" then
+                    if Functions[Args[1]] or false then
+                        Append("task.spawn(function()")
+                        AddNest(1)
+                        Args[1]()
+                        AddNest(-1)
+                        Append("end)")
+                    else
+                        local Function = Beautify(Args[1], nil, {bypass_beautify = true})
+
+                        Append(`{Indexed}({Function})`)
+                    end
+                elseif Indexed == "task.delay" then
+                    --[[if Delays < 3 and Args[1] <= 5 then
+                        Delays += 1
+                        task.wait(Args[1])
+                    end]]
+                    if not Variables[Args[2]] and typeof(Args[2]) ~= "function" and typeof(Args[2]) ~= "thread" then
+                        error(`invalid argument #2 to 'delay' (function or thread expected)`)
+                    end
+
+                    Wait(Args[1])
+
+                    local Function = Beautify(Args[2], nil, { bypass_beautify = true })
+
+                    Append(`{Indexed}({Args[1]}, {Function})`)
+                else
+                    --> Works for task.defer aswell since hookOp is on
+                    print("Nooo",Indexed,Args)
+
+                    Append(`{Indexed}({BeautifyTuple(unpack(Args))})`)
+                end
+		    end, Indexed)
+	    end
+    })
+
+    BaseEnv.task = Task
+    BaseEnv.spawn = CreateFunction(function(f)
+        if Functions[f] then
+            Append("spawn(function()")
+            AddNest(1)
+            f()
+            AddNest(-1)
+            Append("end)")
+        else
+            local Function = Beautify(f, nil, {bypass_beautify = true})
+
+            Append(`spawn({Function})`)
+        end
+    end, "spawn")
+
+    local function Type(x, a)
+        local p = Variables[a]
+        local potential = PotentialTypes[p]
+        local f = x == 'type' and type or typeof
+
+        if p == "fenv" then
+            return "table"
+        end
+
+        local val = EnvValues[p]
+        if Functions[a] then
+            potential = "function"
+        elseif val then
+            potential = PotentialTypes[val[1]] or f(val[1])
+        end
+
+        if potential then
+            if x == "type" and not find(LuauTypes, potential) then
+                potential = "userdata"
+            end
+            
+            local Var = DefineVar(`{x}({BeautifyTuple(a)})`) -- local var1 = type(debug.setupvalue), result is of type string, value of "function"
+
+            SetInternal(Var, potential)
+            PotentialTypes[Var] = "string" -- type(anything) results in a string
+
+            return FallbackValue(Var, potential, { is_type = true })
+        end
+
+        if not p then return f(a) end -- dont spy useless things
+
+        local Var = DefineVar(`{x}({Beautify(a)})`)
+
+        local _type = GetType(p)
+
+        if _type == "nil" and not Settings.spyexeconly then
+            _type = f(a) -- true type
+        end
+
+        SetInternal(Var, _type)
+
+        return Spy(Var, nil, {is_type=true})
+    end
+
+    BaseEnv.type, BaseEnv.typeof = function(x) return Type("type", x) end, function(x) return Type("typeof", x) end
+
+    BaseEnv.islclosure = function(a)
+        local Var = DefineVar(`islclosure({Variables[a] or Beautify(a, nil, {ignore_funcs = true})})`)
+        local Value;
+
+        if CClosures[a] or IsExecutor(a) then Value = false else Value = islclosure(a) end
+            
+        return FallbackValue(Var, Value)
+    end
+
+    BaseEnv.iscclosure = function(a)
+        local Var, Value = DefineVar(`iscclosure({Variables[a] or Beautify(a, nil, {ignore_funcs = true})})`);
+
+        if CClosures[a] or IsExecutor(a) or iscclosure(a) then Value = true else Value = false end
+
+        return FallbackValue(Var, Value)
+    end
+
+    BaseEnv.setfenv = function(a, b)
+        if Variables[a] then
+            Append(`setfenv({BeautifyTuple(a, b)})`)
+            error("'setfenv' cannot change environment of given object")
+        end
+
+        if getmetatable(b) then return end
+
+        if typeof(a) == "number" or not Luraph then
+            Append(`setfenv({Beautify(a)}, {Beautify(b)})`)
+
+            for i, v in next, b do
+                EnvValues[i] = {v}
+            end
+            return Env;
+        end
+
+        return setfenv(a, setmetatable(b, Env));
+    end
+
+    BaseEnv.loadstring, BaseEnv.load = Loadstring, load
+    BaseEnv.getgenv, BaseEnv._G = function() return genv end, _g
+
+    BaseEnv.collectgarbage = function(t)
+        if t ~= "count" then error("collectgarbage must be called with 'count'; use gcinfo() instead") end
+
+        return collectgarbage("count")
+    end
+
+    local function request(Var)
+        local Table = {
+            StatusCode = 200,
+            Success = true,
+            StatusMessage = "OK",
+            Headers = Spy(Index("Headers", Var)),
+            Body = Spy(Index("Body", Var), nil, {
+                is_http = true
+            })
+        };
+
+        return GetMetatable(Var, {
+            __index = function(_, Key)
+                local v2 = DefineVar(Index(Key, Var));
+
+                return FallbackValue(v2, Table[Key]);
+            end
+        })
+    end
+
+    local function Request(n)
+        return CreateFunction(function(args)
+            local Var = DefineVar(`{n}({Beautify(args)})`);
+            --[[if not args.Method or args.Method == "GET" then
+                --SetInternal(Var, safeHttpGet({nil, Var}, args.Url, true))
+                return Spy(Var, nil, {custom_var = true});
+            end]]
+
+            return request(Var);
+        end, n)
+    end
+
+    BaseEnv.request = Request("request");
+    BaseEnv.http = table.freeze({
+        request = Request("http.request"),
+        http_request = Request("http.http_request")
+    })
+    Variables[BaseEnv.http] = "http"
+    local Syn = {
+        request = Request("syn.request")
+    }
+
+    BaseEnv.syn = GetMetatable("syn", {
+        __index = function(_, Key)
+            local Var = DefineVar(Index(Key, "syn"))
+            local SynVal = Syn[Key];
+
+            if SynVal then return SynVal end
+
+            return Spy(Var);
+        end
+    })
+
+    local IsLowerCase = function(byte : number) return byte >= 97 and byte <= 122 end
+    local IsNumber = function(byte : number) return byte >= 48 and byte <= 57 end
+    local IsUpperCase = function(byte : number) return byte >= 65 and byte <= 90 end
+
+    local function DoIgnore(Key, IsInGarbage) -- true = ignore the variable
+        if typeof(Key) ~= "string" then return false end
+        if #Key < 12 then return false end
+        
+        -- must have: 1 uppercase and (1 lowercase or number)
+
+        local Uppercase = match(Key, "[A-Z]")
+        local Lowercase = match(Key, "[a-z]")
+
+        if not IsInGarbage and IsGarbageString(Key) then --> If it is a 'garbage string', have no mercy on it.
+            return Uppercase and (Lowercase or match(Key, "%d"))
+        end
+
+        --> If it's not a garbage string, it must have more uppercase than lowercase.
+
+        --return Uppercase and (Lowercase or match(Key, "%d"))
+        local Uppercases, Lowercases = 0, 0
+        for char in Key:gmatch(".") do
+            local byte = char:byte()
+            if IsLowerCase(byte) then
+                Lowercases += 1
+            elseif IsUpperCase(byte) or IsNumber(byte) then
+                Uppercases += 1
+            end
+        end
+
+        return Uppercases >= Lowercases or (Lowercases == Uppercases + 1)
+    end
+
+    if Original then SetData{DoIgnore = DoIgnore} end
+
+    local EnvLevels = {}
+    local IterFuncs = {"pairs", "ipairs", "next"}
+
+    local Getfenv = CreateFunction(function(lvl)
+        lvl = GetInternalValue(lvl or 0)
+        
+        if typeof(lvl) == "number" then
+            if lvl < 0 or lvl == math.huge then return error("invalid argument #1 to 'getfenv' (level must be non-negative)") end -- negative or math.huge
+            if (lvl // 1 ~= lvl or lvl > Nest + 1 + IsInLoadstring) then return error("invalid argument #1 to 'getfenv' (invalid level)") end -- float number or level is too high.
+        else
+            if not Functions[lvl] and typeof(lvl) ~= "function" then
+                Append(`getfenv({Beautify(lvl)})`)
+                error(`invalid argument #1 to 'getfenv' (number expected, got {typeof(lvl)})`)
+            end
+        end
+
+        top_level.fenv = true
+
+        local Var = "fenv" -- Since it'll be defined at the top
+
+        PotentialTypes[Var] = "table"
+        EnvLevels[Var] = EnvLevels[Var] or GetMetatable(Var, {
+            __index = function(_, Key)
+                if Prometheus[Key] then return end
+
+                CustomPrefix = "fenv"
+
+                return Env[Key]
+            end,
+            __newindex = function(_, Key, Value)
+                CustomPrefix = "fenv"
+
+                Env[Key] = Value
+            end
+        }, {
+            is_env = true
+        })
+
+        return EnvLevels[Var]
+    end, "getfenv")
+
+    for i, v in next, EnvValues do
+        BaseEnv[i] = v[1]
+    end
+
+    for i, v in next, BaseEnv do
+        if typeof(v) == "function" and not find(SafeEnv, i) and not Functions[v] and not Prometheus[i] then
+            BaseEnv[i] = CreateFunction(function(...)
+                if not TrueEnv[i] then OpCountCheck() end
+
+                return v(...)
+            end, i) -- maybe aura?
+            PotentialTypes[i] = "function"
+        end
+    end
+
+    local SpoofedTimes = 0;
+    local Next = function(tbl, k)
+        local Var = Variables[tbl]
+
+        if k or not Var then
+            if Variables[k] then return nil, nil end
+
+            return next(tbl, k)
+        end
+
+        return getmetatable(tbl).__iter(Var, "next")(k)
+    end
+
+    Functions[Next] = true
+    Variables[Next] = "next"
+
+    local mt = {
+        __index = function(_, Key)
+            print("Indexed",Key)
+            local KeyToUse = Key;
+            Key = GetInternalValue(Key);
+
+            if KeyToUse ~= Key then
+                local Old = rawget(_, Key)
+                --print("Bye",Old)
+                if Old ~= nil then return Old end
+            end
+
+            if Pristine and SpoofedTimes < 1 then
+                if Key == "game" or Key == "workspace" or Key == "task" or Key == "CFrame" then return nil end
+                if Key == "spawn" then SpoofedTimes += 1 return nil end
+            end
+
+            if Key == "next" then
+                return Next
+            end
+
+            local Genv = CustomEnvs["getgenv()"][Key]
+
+            if Genv then return Genv[1] end
+
+            if Key == "_G" then return _g end
+            if Key == "shared" then return _shared end
+
+            local Value = EnvValues[Key] or Predefined[Key];
+
+            if (Key == "getconstants" or Key == "_ENV" or -- moonsec / antitamper bypass (_ENV shouldn't exist)
+                (typeof(Key) == "string" and #Key == 2) -- moonveil variables
+            ) and not Value -- Make sure it doesn't exist
+            then
+                return
+            end
+            local IsExec = IsExecutor(Key)
+
+            if find(IterFuncs, Key) then
+                return CreateFunction(function(t, k)
+                    local Variable = Variables[t]
+                    if Variable then
+                        local iter = getmetatable(t).__iter
+
+                        if iter then return iter(Variable, Key) end
+
+                        --[[local Called;
+
+                        local i, v = GetCount("i"), GetCount("v")
+                        local FixedPath = `{Key}({Variable})`
+
+                        Append(`for {i}, {v} in {FixedPath} do`)
+
+                        return function()
+                            if Called then WaitingEnds.forloops -= 1 CloseStatement() return nil, nil else WaitingEnds.forloops += 1 AddNest() Called = true end
+
+                            return Spy(i), Spy(v)
+                        end]]
+                    end
+
+                    if typeof(t) ~= "table" then
+                        Append(`{Key}({BeautifyTuple(t, k)})`)
+                        return function()return nil,nil;end
+                    end
+
+                    return TrueEnv[Key](t, k)
+                end, Key)
+            end
+
+            local Indexed = Index(KeyToUse, CustomPrefix)
+
+            CustomPrefix = nil
+
+            if (Settings.spyexeconly and not IsExec) or (not IsExec and DoIgnore(Key)) or Value then 
+                -- If (spy exec is on & it's not an exec value) or Value exists, or DoIgnore() and it's not an exec thing
+                return (Value or {})[1]
+            end
+
+            local InternalValue;
+
+            if Value then
+                InternalValue = GetInternalValue(Value[1])
+
+                if typeof(InternalValue) == "function" then
+                    return CreateFunction(function(...)
+                        DefineVar(`{Indexed}({BeautifyTuple(...)})`)
+
+                        CallStack[Nest + 1] = InternalValue
+
+                        local StartLine = #Output
+                        local Out = pack(Value[1](...))
+
+                        for i = 1, Out.n do -- Return values
+                            local arg = Out[i]
+                            if Variables[arg] then -- If the value is spied
+                                local Vars = {}
+                                local Values = {}
+
+                                for i = 1, Out.n do
+                                    local Var = GetVar()
+
+                                    insert(Vars, Var)
+                                    insert(Values, FallbackValue(Var, Out[i]))
+                                end
+
+                                --Output = move(Output, 1, StartLine - 1, 1, {}) -- remove the lil thing we added (the first line)
+                                DefineVars(Vars, `{Indexed}({BeautifyTuple(...)})`)
+                            
+                                return unpack(Values)
+                            end
+                        end
+
+                        return unpack(Out)
+                    end, Indexed)
+                end
+
+                return FallbackValue(Indexed, InternalValue)
+                --[[
+                    If hookOp: returns a Spied table with it's value being InternalValue
+                    If not hookOp: returns the actual value
+
+                    hookOp off example:
+
+                    So, a = {1}, local x = a --> the actual value, b = a -> b = {1}
+
+                    hookOp on:
+                    a = {1}, local x = 1 -> spied table with name being a, b = a -> logs correctly
+
+                    print(a == b) off: yes
+                    print(a == b) on: should be yes because internal values
+                ]]
+                --return InternalValue
+            end
+
+            print("okay bye then",Indexed)
+
+            local Thing = DefineVar(Indexed)
+
+            return Spy(Thing);
+        end,
+        __newindex = function(_, Key, Value)
+            if typeof(Value) == "function" then pcall(setfenv, Value, Env) end
+
+            local V = EnvValues[Key]
+            EnvValues[Key] = {Value};
+
+            local IsVar = Variables[Value]
+
+            if Key == "heh" or Key == "ff" then return end
+            if (Settings.spyexeconly and (typeof(Value) == "table" or typeof(Value) == "function") and not IsVar) then return end
+            if DoIgnore(Key) or IsExecutor(Key) then return end
+
+            if typeof(Value) == "number" or typeof(Value) == "string" then
+                if Value == "This file was protected with MoonSec V3" then
+                    insert(top_level.messages, "This file looks like it was protected with MoonSec V3, something we offer complete deobfuscation for in premium tier 2, if this output isn't good enough, consider buying premium tier 2 :)")
+                end
+                if V then
+                    return; -- don't log duplicates
+                end
+            end
+
+            if not IsVar then SetInternal(Key, Value) end
+            
+            local Indexed = Index(Key, CustomPrefix)
+            CustomPrefix = nil
+
+            if typeof(Value) == "function" and typeof(Key) == "string" then
+                local Beautified = Beautify(Value, nil, {
+                    funcName = Indexed
+                })
+
+                Append(Beautified)
+                return
+            end
+
+            local Beautified = Beautify(Value)
+
+            Append(`{Indexed} = {Beautified}`)
+        end,
+        __tostring = function() return "getfenv()" end,
+        __metatable = nil
+    }
+
+    local Spied = table.clone(getmetatable(Spy("getfenv()")))
+    for i, v in next, mt do Spied[i] = v end
+
+    BaseEnv.getfenv = Getfenv
+    if true then
+        for k, f in next, GlobalEnv.DynamicSpy do
+            BaseEnv[k] = CreateFunction(function(...)
+                for _, v in {...} do
+                    local Var = Variables[v]
+                    if Var and Var ~= "getfenv" then
+                        return f(DefineVar(`{k}({BeautifyTuple(...)})`), ...)
+                    end
+                end
+
+                return f(nil, ...)
+            end, k)
+        end
+
+        for k, f in next, GlobalEnv.StaticSpy do
+            BaseEnv[k] = CreateFunction(function(...)
+                OpCountCheck()
+                return f(DefineVar(`{k}({BeautifyTuple(...)})`), ...)
+            end, k)
+        end
+    end
+
+    Env = setmetatable(BaseEnv, Spied)
+
+    Variables[Env] = "getfenv()"
+
+    local List = Settings.macros
+    if Original and List and fs.isFile(List) then
+        local macroData = fs.readFile(List);
+
+        local thing = GetMetatable("macros", {
+            __index = function(_, Key) return Macros[Key] or Env[Key]; end
+        })
+
+        local s, e = pcall(setfenv(loadstring(macroData), thing))
+        if not s then Comment(`failed to load macros, error message: {e}`) end
+    end
+
+    SetInternal("getfenv()", Env)
+    Metadata[Env] = {
+        is_env = true
+    }
+
+    function SpyParams(Amount)
+        if typeof(Source) == "function" then
+            print(debuginfo(Source, "slnaf"))
+        end
+        local Params = {}
+
+        for i = 1, Amount do
+            insert(Params, Spy(`args{ArgsId}[{i}]`, {
+                OriginalIsParam = true
+            }))
+        end
+
+        insert(Params, Spy("...", {
+            OriginalIsParam = true
+        }))
+
+        return Params
+    end
+
+    SpiedParams = SpyParams(ParamCount)
+
+    local LoadedFunc;
+
+    if typeof(Source) == "function" then
+        if Variables[getfenv(Source)] then -- Env already exists.
+            LoadedFunc = Source -- keeps the old env's nest..? Bad!!
+        end
+    else
+        LoadedFunc = setfenv(Loaded, Env)
+    end
+
+    local Result = pack(pcall(LoadedFunc, unpack(SpiedParams)))
+    local Message = not Result[1] and Result[2]
+    local Out = ""
+
+    function GetParamStr()
+        if ParamCount == 0 then return "" end
+
+        return `local args{ArgsId} = \{ ... }\n`
+    end
+
+    if Original then
+        Out = GetParamStr()
+
+        Output = move(Output, 1, #Output, 2, {Out})
+    end
+
+    CloseAllEnds()
+
+    local NewOut = {}
+    for _, v in next, Output do
+        for _, l in next, string.split(v, "\n") do
+            insert(NewOut, l)
+        end
+    end
+
+    Out = concat(NewOut, "\n")
+
+    if not Result[1] then --! not success
+        Out ..= `\n{Tab}error({Beautify(Message)}) -- Internal Error\n`
+
+        Output = {}
+
+        for _, v in next, Output do
+            Out ..= v .. "\n"
+        end
+    else
+        if Result.n >= 2 then
+            local ReturnValue = ""
+
+            for i = 2, Result.n do -- nil values
+                local x = Result[i]
+
+                ReturnValue ..= Beautify(x) .. ", "
+            end
+
+            ReturnValue = sub(ReturnValue, 1, -3)
+
+            Out ..= `\n{Tab}return{#ReturnValue ~= 0 and " " .. ReturnValue or ""}\n`
+        end
+    end
+
+    Out = gsub(Out, "\n%s*\n", "\n")
+
+    if Original then
+        DONE_PROCESSING = true;
+
+        local function IterateStr(x)
+	        if Iterated[x] then return end
+	        Iterated[x] = true
+
+	        for _, val in next, x do
+		        local t = typeof(val)
+
+		        if t == "table" and not Variables[val] then
+			        IterateStr(val)
+		        elseif t == "string" and not Strings[val] and not IsGarbageString(val, true) then
+			        Strings[val] = true
+			        insert(StringsList, val)
+		        end
+	        end
+        end
+
+        if Settings.constant_collection and false then
+            print("Collecting constants..")
+
+            Gc = move(Gc, GC_FILL_COUNT, #Gc, 1, {})-- remove the fake values we added
+
+            IterateStr(Gc)
+
+            print(format("Beautifying list.. (%d items)", #StringsList))
+
+            if #StringsList ~= 0 then Out = "local constants = " .. Beautify(StringsList, 1) .. "\n\n" .. Out end
+        end
+
+        if top_level.fenv then
+            Out = "local fenv = getfenv()\n\n" .. Out
+        end
+
+        local Beautified = {}
+
+        local function SortBeautify()
+            local Array = {}
+
+            for Func, data in next, ToBeautify do
+                insert(Array, { Func = Func, data = data, n = data[4] })
+            end
+
+            table.sort(Array, function(a, b) -- The functions that were added to the list get beautified first
+                return a.n < b.n
+            end)
+
+            return Array
+        end
+
+        local BeautifyArray = SortBeautify()
+        local function GetLength() local l = 0 for _ in ToBeautify do l += 1 end return l end
+
+        local Len = GetLength()
+        local LastLen = Len
+
+        local function Iterate()
+            local Current = GetLength()
+            if Current ~= LastLen then
+                BeautifyArray, LastLen = SortBeautify(), Current
+            end
+
+            for _, List in next, BeautifyArray do
+                local Func, data = List.Func, List.data;
+
+                if Beautified[Func] then continue end
+                -- Avoid calling something multiple times (Which can cause errors, detections & unwanted behavior)
+
+                local id, indent, args = data[1], data[2], data[3]
+
+                local beautified = DoIgnoreLocals[Func] and "(function()end)" or Beautify(Func, indent, args):gsub("%%", "%%%%")
+
+                Beautified[Func] = true
+
+                Out = gsub(Out, id, beautified)
+            end
+        end
+
+        if Settings.debug then fs.writeFile("debug.lua", Out) end
+
+        for i = 1, 5 do Iterate() end
+
+        if #PlaceOutside > 0 then
+            local Top = ""
+
+            for _, Str in next, PlaceOutside do
+                if not Str then continue end
+                Out = gsub(Out, "local " .. Str .. "(%s*=)", Str .. "%1")
+
+                Top ..= Str .. ", "
+            end
+
+            --local Concatted = "local " .. concat(PlaceOutside, ", ")
+            Out = "local " .. Top:sub(1, -3) .. ";\n" .. Out
+        end
+    end
+
+    return Out
+end
+
+function Obf(Path, Obfuscator)
+    local OutPath = Path .. "unparsed.txt"
+    local Args = {
+        "./modules/unparser-hookop.luau",
+        Path,
+        OutPath,
+        CallId,
+        Obfuscator == "Luraph" and "0" or Settings.constant_collection and "1" or "0"
+    }
+
+    local POut = process.exec(process.os == "windows" and "lute.exe" or "bin/lute-linux", Args)
+
+    local s, Content = pcall(fs.readFile, OutPath)
+    if not DONT_DELETE_FILES and fs.isFile(OutPath) then pcall(fs.removeFile, OutPath) end
+    if not s or DONT_DELETE_FILES then print("Output:",POut.stdout,POut.stderr) end
+    if not s then
+        return `--err\n{POut.stderr}` 
+    end
+
+    local Index = sub(Content, 1, 3) == "\r\n;" and 4 or sub(Content, 1, 2) == "\n;" and 3 or nil
+    Content = Index and sub(Content, Index) or Content
+
+    return Content
+end
+
+local function Decode(File, raw)
+    Settings.outfile = Settings.outfile or "out.lua"
+
+    File = Settings.input_file or File
+
+    local function Save(x)
+        if x then
+            if sub(x, -1) == "\n" then x = sub(x, 1, -2) end -- remove trailing newline
+        end
+
+        print("Saving..")
+        fs.writeFile("./" .. Settings.outfile, x or "-- file doesn't exist")
+        print("Saved.")
+    end
+
+    local s, Source;
+    if File:sub(1, 4) == "http" then
+        s, Source = true, httpGet(File)
+        File = GenerateId(16)
+        fs.writeFile(File, Source)
+        task.delay(1, fs.removeFile, File)
+    else
+        s, Source = pcall(fs.readFile, File)
+        if not s then print("File doesn't exist", File) return Save() end
+    end
+
+    print("Obfuscating")
+
+    local ObfStart = clock()
+    local SourceCode = Settings.hookOp and not raw and not Settings.obfed and Obf(File) or Source
+
+    if not IsTesting then fs.removeFile(File) end;
+
+    print("Took",clock() - ObfStart,"seconds to obfuscate")
+
+    local Start = clock()
+
+    local Success, Code = pcall(Dump, SourceCode, nil, true)
+
+    local End = clock() - Start
+
+    if type(Code) == "userdata" or not Success then --! error
+        Code = `error({format("%q", tostring(Code))}) --internal error`
+    end
+
+    Code = gsub(Code, "%.%.%.:", "(...):")
+
+    local discord = "discord.gg/threaded or discord.gg/aqfudJEEeE"
+    
+    local Out = `-- This file was generated with UnveilR {Settings.version or "testing version"} at {discord} (hookOp is {Settings.hookOp and "on" or "off sadly"}).\n\n{Code}`
+
+    if Settings.minifier then Save(Out); end --> Incase it takes too long to minify.
+
+    print("Took",End,"seconds to process.",Success)
+
+    if Settings.minifier then
+        Out = Minify(Out)
+    end
+
+    Out = HideErrors(Out, nil, not IsTesting)
+    Out = gsub(Out, ": in function '%w+'", "")
+    --Out = gsub(Out, `%[string \\"luau.load%(...%)\\"%]`, "[script]")
+    Out = gsub(Out, "\n%s*\n", "\n")
+
+    for _, msg in next, top_level.messages do
+        Out = `-- {msg}\n` .. Out
+    end
+
+    if DIDNT_PARSE then
+        Out = "--err\n" .. gsub(Out, "%-%-err\n", "")
+    end
+
+    if DEEP_ANALYSIS then
+        local List = {}
+        for i, v in next, FuncCalls do
+            if v > 0 then List[i] = v end
+        end
+        print("Function Calls: (DEEP ANALYSIS)", List)
+    end
+
+    Save(Out)
+end
+
+local Tests = {};
+
+local function Test(Out, Input)
+    Out = "tests/" .. Out .. ".lua"
+    Settings.outfile = Out
+    Decode(Input)
+
+    local File = fs.readFile(Out)
+    Tests[Input] = ( File:find("Hello, world") or File:find("hello world") ) and "✅" or "❌"
+end
+
+local function RunTests() --! It's kinda broken, don't trust results from this.
+    Test("msec", "msec/all.txt")
+    Test("msec-constants", "msec/constant.txt")
+    Test("msec-antitamper", "msec/msat.txt")
+    Test("lph", "obf/lphobf.lua")
+    Test("moonveil", "obf/moonveil.txt")
+    Test("25ms", "obf/25ms.lua")
+
+    for i, v in Tests do print(v, i) end
+end
+
+return Decode("obfs/luraph/v14.4.2/luashark.txt")
+--return Decode("obfs/msec/nothing.lua")

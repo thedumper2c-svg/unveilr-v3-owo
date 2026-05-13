@@ -1,0 +1,1 @@
+loadstring=require("@lune/luau").load;load=loadstring;local req=function(...)print('Attempted to require',...)return nil end;require=req;local a=table.clone(getfenv())local b=setmetatable({},{__index=function(c,d)if d=="require"then return req end;return a[d]end,__newindex=function(c,d,e)a[d]=e end})setfenv(1,b)
