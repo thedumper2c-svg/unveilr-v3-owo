@@ -3,15 +3,38 @@
 - **Purpose:** Summarizes the bot's commands, how premium (tier 1/2) and persistence work, how ScamBlox detection works, and where the main source-exposure vulnerabilities are.
 
 **Commands (high level)**
-- **Slash (registered globally/guild):** `/vouch`, `/ticket`, `/close`, `/unveilr`, `/beautify`, `/minify`, `/credits`, `/config`, `/claim`, `/stats`, `/help` — these map to core features (run UnveilR, formatting, credits, premium claim, stats, help).
-- **Prefix commands (default prefix `.`):** many commands implemented in `db.js` under the `commands` object. Notable examples:
-  - **help:** lists commands and command info.
-  - **unveilr / dump (via `.unveilr`):** runs the decompiler/processor on a script (uses `dump()` which writes inputs to `./unveilr/inputs`, runs the sandboxed `lune` process and returns attachments or files).
-  - **beautify / minify:** call beautifier/minifier and return attached file via `createAttachment()`.
-  - **decompile:** uploads attachments to `OracleClient.decompile()` and returns decompiled files.
-  - **view:** zips a user's `storage/{id}` folder and sends the `.zip` to the requester.
-  - **upload (owner-only):** posts an attached file to an external upload endpoint (`/api/uploadScript` on `vercelUrl`).
-  - **generate / generatecredits / give:** admin/owner utilities for generating keys and altering credits.
+- **Slash (registered globally/guild):** `/vouch`, `/ticket`, `/close`, `/unveilr`, `/beautify`, `/minify`, `/credits`, `/config`, `/claim`, `/stats`, `/help` — these map to core bot features.
+- **Prefix commands (default prefix `.`):** the bot defines many commands in `db.js` under the `commands` object. Important ones include:
+  - **help:** lists commands and command info, including premium-only commands.
+  - **l / dump / log / envlog / unveilr / d:** the main UnveilR processor command. This reads the provided script, queues it, checks credits/premium, runs the `dump()` function on `./unveilr/main.luau`, and returns a processed `.lua` file. It also logs scripts to `storage/{userId}` and handles captchas every 20 uses.
+  - **beautify / bf / coolify:** beautifies a Lua script and returns it as `beautified.lua`.
+  - **minify / mf / uncoolify:** minifies a Lua script and returns it as `minified.lua`.
+  - **decompile:** sends attached files to `OracleClient.decompile()` and returns decompiled output.
+  - **deobfuscate / deobf:** premium tier 2 only, deobfuscates MoonSec V3 files and decompiles the result.
+  - **decompress / ld:** premium tier 2 only, logs loadstrings in a file and returns the output.
+  - **detect / whatobfisthis / detectobf:** detects the obfuscator used for a file.
+  - **rename / renamer / renameittakeit:** premium tier 2 only, renames a script using an external renamer API.
+  - **luau:** premium tier 2 only, runs Lua code in a normal Luau process with a timeout and returns console output.
+  - **config / cfg / settings:** opens an interactive settings panel for UnveilR options.
+  - **bestcfg:** premium tier 2 only, applies a recommended setting profile for speed, accuracy, or tamper handling.
+  - **credits / cred / creds:** shows current credit balance or premium status.
+  - **claim / collect / redeem:** redeem premium keys to get premium status.
+  - **claimcredits / claimcreds:** redeem credit codes for non-premium users.
+  - **recover / userecovery / userecoverycode:** transfer premium to another account using a recovery code.
+  - **gift / support / helpout:** premium users can gift credits to freemium users.
+  - **boost / redeemboost / imabooster:** claim booster rewards and receive credits.
+  - **verify / vf:** verify in the official server to gain +1 daily credit.
+  - **wl / whitelist / revoke / unwl / blacklist / unblacklist:** moderator-only user management for premium access and blocking.
+  - **webhook / wb / webhookinfo / wbinfo:** fetch webhook info and metadata.
+  - **stats / statistics / data:** show bot/server usage statistics.
+  - **view:** owner/admin command that zips and sends contents of `storage/{id}`.
+  - **upload:** owner-only command that uploads an attached script to the external `vercelUrl` upload API.
+  - **generatecredits / give:** admin utilities for generating credit codes and handing out credits.
+  - **wrd / wearedevs:** send code to the WeAreDevs obfuscator API and return the obfuscated script.
+  - **isup / test / uptime:** check bot uptime and status.
+  - **hug:** sends a friendly message.
+
+- **Note:** `.l` is the actual core dump command, and many other commands are built around file handling and premium features. `commands.help` can display all available commands and tier requirements in Discord.
 
 **How premium (tier 1 / tier 2) is stored and enforced**
 - **Storage:** user records are persisted in SQLite `bot.db` — table `users (userId TEXT PRIMARY KEY, data TEXT)` where `data` is JSON.
